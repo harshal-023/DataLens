@@ -39,21 +39,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation();
 
   const primaryNavItems = [
-    { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Data Sources', path: '/data-sources', icon: Cable },
-    { name: 'Dashboards', path: '/dashboards', icon: Layers },
-    { name: 'Data Prep', path: '/data-preparation', icon: Workflow },
-    { name: 'Data Studio', path: '/data', icon: Database },
-    { name: 'Ask Your Data', path: '/ask', icon: MessageSquare },
-    { name: 'AI Analyst', path: '/business-analyst', icon: Compass },
-    { name: 'Advanced ML', path: '/advanced-analytics', icon: Sparkles },
-    { name: 'Prompt Lab', path: '/prompt-lab', icon: FlaskConical },
-    { name: 'Reports', path: '/reports', icon: FileText },
-    { name: 'Team', path: '/workspaces/members', icon: Users },
-    { name: 'Activity', path: '/activity', icon: Activity },
-    { name: 'Governance', path: '/governance', icon: Shield },
-    { name: 'Automation', path: '/automation', icon: RefreshCw },
-    { name: 'Settings', path: '/settings', icon: SettingsIcon },
+    {
+      name: 'Data Management',
+      path: '/data',
+      icon: Database,
+      subpaths: ['/data', '/data-sources', '/data-preparation'],
+    },
+    {
+      name: 'Analytics & Dashboards',
+      path: '/dashboards',
+      icon: LayoutDashboard,
+      subpaths: ['/dashboards', '/dashboard', '/advanced-analytics'],
+    },
+    {
+      name: 'AI Data Analyst',
+      path: '/business-analyst',
+      icon: Sparkles,
+      badge: 'AI',
+      subpaths: ['/business-analyst', '/ask', '/prompt-lab'],
+    },
+    {
+      name: 'Reports',
+      path: '/reports',
+      icon: FileText,
+      subpaths: ['/reports'],
+    },
+    {
+      name: 'Workspace & Settings',
+      path: '/settings',
+      icon: SettingsIcon,
+      subpaths: ['/settings', '/workspaces', '/activity', '/governance', '/automation'],
+    },
   ];
 
   const sidebarContent = (
@@ -96,7 +112,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const Icon = item.icon;
             const isActive =
               location.pathname === item.path ||
-              (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+              item.subpaths.some(
+                (sp) => location.pathname === sp || location.pathname.startsWith(sp + '/')
+              );
 
             return (
               <NavLink
@@ -116,7 +134,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }`}
                 />
 
-                {!isCollapsed && <span className="truncate tracking-wide">{item.name}</span>}
+                {!isCollapsed && (
+                  <>
+                    <span className="truncate tracking-wide">{item.name}</span>
+                    {item.badge && (
+                      <span className="ml-auto text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-[#39C3B8]/20 text-[#8BE5DE] border border-[#39C3B8]/40">
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
               </NavLink>
             );
           })}

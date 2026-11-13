@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
+import { ModuleSubNav } from './ModuleSubNav';
 import { PageUpperWave } from '../common/PageUpperWave';
 
 export const AppLayout: React.FC = () => {
@@ -30,6 +31,7 @@ export const AppLayout: React.FC = () => {
 
           {/* Page Outlet content rendered cleanly above the background wave */}
           <div className="relative z-10">
+            <ModuleSubNav />
             <Outlet />
           </div>
         </main>
