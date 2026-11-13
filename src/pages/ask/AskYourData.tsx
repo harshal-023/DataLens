@@ -86,6 +86,7 @@ export const AskYourData: React.FC = () => {
     timestamp: `Today, ${timeStr}`,
     content: res.detailed_narrative || res.content,
     directAnswer: res.direct_answer || res.content,
+    intent: res.intent || undefined,
     metrics: res.metric_cards.map((c) => ({
       label: c.title,
       value: c.value,
@@ -229,6 +230,7 @@ export const AskYourData: React.FC = () => {
               timestamp: `Today, ${nowTime}`,
               content: res.detailed_narrative,
               directAnswer: res.executive_summary,
+              intent: (res as any).intent || undefined,
               metrics: res.metric_cards.map((c) => ({
                 label: c.title,
                 value: c.value,

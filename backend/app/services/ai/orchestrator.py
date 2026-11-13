@@ -12,6 +12,11 @@ from app.models.analysis_run import AnalysisRun
 from app.models.dataset import Dataset
 from app.models.dataset_version import DatasetVersion
 from app.services.ai.factory import AIProviderFactory
+from app.services.ai.intent_classifier import (
+    ConversationalResponseBuilder,
+    ConversationIntent,
+    IntentClassifier,
+)
 from app.services.ai.schemas import (
     AIAskResponse,
     AIChartData,
@@ -42,6 +47,34 @@ class AIAnalyticsOrchestrator:
         return f"${formatted}" if is_currency else formatted
 
     @classmethod
+    def _get_suggested_questions(
+        cls, dataset_name: str, col_names: list[str]
+    ) -> list[str]:
+        cols_lower = [c.lower() for c in col_names]
+        has_rev = any(k in cols_lower for k in ("revenue", "sales", "amount", "price", "cost", "total"))
+        has_prod = any(k in cols_lower for k in ("product", "item", "plan", "sku", "facility", "category"))
+        has_reg = any(k in cols_lower for k in ("region", "country", "city", "state", "location", "territory"))
+        has_date = any(k in cols_lower for k in ("date", "order_date", "month", "created_at", "timestamp"))
+
+        qs: list[str] = []
+        if has_prod and has_rev:
+            qs.append("Which product generated the highest revenue?")
+        if has_date and has_rev:
+            qs.append("Show monthly revenue trend")
+        if has_reg and has_rev:
+            qs.append("Compare regional performance")
+        if not qs and has_rev:
+            qs.append("What is the total revenue?")
+        if not qs and has_prod:
+            qs.append("Breakdown by top products")
+        if not qs:
+            qs.extend([
+                f"Give me key insights for {dataset_name}",
+                "Show dataset summary and distribution",
+            ])
+        return qs[:3]
+
+    @classmethod
     async def process_question(
         cls,
         question: str,
@@ -56,7 +89,69 @@ class AIAnalyticsOrchestrator:
         start_time = time.perf_counter()
         router = AIProviderFactory.get_router()
 
-        # 1. Build minimal schema prompt metadata (Zero raw cell data by default)
+        # Format conversation history if supplied
+        formatted_history: list[dict[str, str]] | None = None
+        if conversation_history:
+            formatted_history = [
+                (turn.model_dump() if hasattr(turn, "model_dump") else turn)
+                for turn in conversation_history
+            ]
+
+        # 1. Intent Classification Layer (Distinguish Conversation from Data Analytics)
+        col_names = [c["name"] for c in columns_meta]
+        intent = IntentClassifier.classify(
+            question=question,
+            conversation_history=formatted_history,
+            columns=col_names,
+        )
+
+        if intent in (
+            ConversationIntent.GREETING,
+            ConversationIntent.CASUAL_CONVERSATION,
+            ConversationIntent.CAPABILITY_QUERY,
+            ConversationIntent.UNSUPPORTED_REQUEST,
+            ConversationIntent.DATA_EXPLANATION,
+        ):
+            suggested_qs = cls._get_suggested_questions(dataset.name, col_names)
+            if intent == ConversationIntent.GREETING:
+                conv_res = ConversationalResponseBuilder.build_greeting_response(
+                    dataset_name=dataset.name,
+                    row_count=version.row_count,
+                    suggested_questions=suggested_qs,
+                )
+            elif intent == ConversationIntent.CASUAL_CONVERSATION:
+                conv_res = ConversationalResponseBuilder.build_casual_response(question)
+            elif intent == ConversationIntent.CAPABILITY_QUERY:
+                conv_res = ConversationalResponseBuilder.build_capability_response(
+                    dataset_name=dataset.name,
+                    suggested_questions=suggested_qs,
+                )
+            elif intent == ConversationIntent.UNSUPPORTED_REQUEST:
+                conv_res = ConversationalResponseBuilder.build_unsupported_response(question)
+            else:  # DATA_EXPLANATION
+                conv_res = ConversationalResponseBuilder.build_explanation_response(
+                    question=question,
+                    columns_meta=columns_meta,
+                )
+
+            return AIAskResponse(
+                direct_answer=conv_res["direct_answer"],
+                metrics=[],
+                chart_data=None,
+                table_data=None,
+                interpretation=conv_res["direct_answer"],
+                evidence=[],
+                warnings=[],
+                suggested_follow_ups=conv_res.get("suggested_follow_ups", []),
+                plan=AnalyticalPlan(
+                    intent="dataset_summary",
+                    metric_column=col_names[0] if col_names else None,
+                ),
+                dataset_version_id=str(version.id),
+                ai_status="operational",
+            )
+
+        # 2. Build minimal schema prompt metadata (Zero raw cell data by default)
         include_samples = getattr(settings, "AI_SEND_SAMPLE_VALUES", False)
         columns_summary = []
         for c in columns_meta:
@@ -86,15 +181,7 @@ class AIAnalyticsOrchestrator:
             "semantic_context": semantic_summary,
         }
 
-        # Format conversation history if supplied
-        formatted_history: list[dict[str, str]] | None = None
-        if conversation_history:
-            formatted_history = [
-                (turn.model_dump() if hasattr(turn, "model_dump") else turn)
-                for turn in conversation_history
-            ]
-
-        # 2. Plan Generation
+        # 3. Plan Generation
         ai_status = "operational"
         try:
             raw_plan_dict, _ = await router.generate_analysis_plan(

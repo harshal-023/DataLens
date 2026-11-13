@@ -104,6 +104,12 @@ class NLAMessage(Base, UUIDPrimaryKeyMixin):
 
     session: Mapped["NLASession"] = relationship("NLASession", back_populates="messages")
 
+    @property
+    def suggested_follow_ups(self) -> list[str]:
+        if self.plan_json and isinstance(self.plan_json, dict):
+            return self.plan_json.get("suggested_follow_ups", [])
+        return []
+
 
 class SavedAnalysis(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """

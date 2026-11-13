@@ -93,6 +93,68 @@ export const ActiveChatState: React.FC<ActiveChatStateProps> = ({
         const isEvidenceOpen = !!expandedEvidence[msg.id];
         const currentChartView = activeChartViews[msg.id] || msg.chartData?.type || 'bar';
 
+        const isConversational =
+          ['GREETING', 'CASUAL_CONVERSATION', 'CAPABILITY_QUERY', 'UNSUPPORTED_REQUEST', 'greeting', 'casual_conversation', 'capability_query', 'unsupported_request'].includes(msg.intent || '') ||
+          ((!msg.metrics || msg.metrics.length === 0) && !msg.chartData && !msg.tableData && (!msg.evidence || msg.evidence.length === 0) && !msg.needsClarification);
+
+        if (isConversational) {
+          return (
+            <div key={msg.id} className="space-y-2">
+              {/* Assistant Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-[#009F98] text-white flex items-center justify-center shadow-2xs">
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-xs font-bold text-[#102C46]">DataLens AI</span>
+                  <span className="text-[10px] text-[#52616C]">{msg.timestamp}</span>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs">
+                  <button
+                    onClick={() => handleCopy(msg.id, msg.directAnswer || msg.content)}
+                    className="p-1 rounded-lg text-[#52616C] hover:text-[#102C46] hover:bg-[#EEF3F6] transition-colors cursor-pointer"
+                    title="Copy response"
+                  >
+                    {copiedId === msg.id ? (
+                      <Check className="w-3.5 h-3.5 text-[#216548]" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Conversational Bubble */}
+              <div className="bg-white rounded-2xl border border-[#DCE5EB] p-4 shadow-subtle max-w-2xl text-xs sm:text-sm text-[#102C46] leading-relaxed space-y-3">
+                <div className="whitespace-pre-line">
+                  {msg.directAnswer || msg.content}
+                </div>
+
+                {/* Follow-up Suggestions Chips */}
+                {msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && (
+                  <div className="pt-2 border-t border-[#EEF3F6]">
+                    <span className="text-[10px] text-[#52616C] uppercase font-bold tracking-wider block mb-2">
+                      Suggested Questions
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {msg.suggestedFollowUps.map((sug, sIdx) => (
+                        <button
+                          key={sIdx}
+                          onClick={() => onSelectQuestion(sug)}
+                          className="px-3 py-1 rounded-full border border-[#DCE5EB] bg-[#F5F8FA] hover:border-[#009F98] hover:bg-[#E0F5F3] text-xs text-[#102C46] font-medium transition-colors cursor-pointer shadow-2xs text-left"
+                        >
+                          {sug}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
         return (
           <div key={msg.id} className="space-y-3">
             {/* Assistant Header matching reference */}

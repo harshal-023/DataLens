@@ -100,6 +100,92 @@ export const AskAnalyticsService = {
     const rowCountAnalyzed = rows.length;
     const columns = dataset.columns || [];
 
+    const nowFormatted = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(new Date());
+
+    // ---------------------------------------------------------
+    // Intent Classification Layer: Distinguish Conversation from Analytics
+    // ---------------------------------------------------------
+    const qClean = q.replace(/[?!.,]+$/, '').trim();
+    const isAnalyticalRequest =
+      /\b(revenue|sales|total|sum|average|avg|mean|count|top|highest|best|lowest|bottom|rank|trend|monthly|daily|quarterly|compare|breakdown|sla|cost|amount|margin|growth)\b/.test(q);
+
+    // 1. GREETING
+    if (/^(hi|hello|hey|heya|howdy|good\s+morning|good\s+afternoon|good\s+evening|greetings|yo|sup|hiya|hey\s+there|hello\s+there)$/i.test(qClean) && !isAnalyticalRequest) {
+      const greetingText = `Hello! I'm your DataLens Business Intelligence Assistant. I see you have **${dataset.name}** active with ${rowCountAnalyzed.toLocaleString()} records across ${columns.length} columns. What business question would you like to explore today?`;
+      return {
+        id: `msg-a-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: nowFormatted,
+        content: greetingText,
+        directAnswer: greetingText,
+        intent: 'GREETING',
+        metrics: [],
+        evidence: [],
+        suggestedFollowUps: this.getSuggestedQuestions(dataset),
+      };
+    }
+
+    // 2. CASUAL CONVERSATION
+    if (/^(thanks|thank\s+you(\s+(very\s+much|so\s+much))?|thx|many\s+thanks|appreciate\s+it|how\s+are\s+you(\s+doing)?|how's\s+it\s+going|nice|cool|great|awesome|perfect|okay|ok|sounds\s+good|understood|got\s+it|bye|goodbye|see\s+you)$/i.test(qClean) && !isAnalyticalRequest) {
+      let casualText = "You're very welcome! Let me know if you would like to explore any metrics, evaluate trends over time, or examine breakdowns in your data.";
+      if (/how\s+are\s+you|how's\s+it\s+going/i.test(qClean)) {
+        casualText = "I'm doing well, thank you! Ready to help you analyze your business data. What would you like to evaluate?";
+      } else if (/bye|goodbye|see\s+you/i.test(qClean)) {
+        casualText = "Goodbye! Feel free to return anytime you need data analysis or business intelligence reports.";
+      }
+      return {
+        id: `msg-a-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: nowFormatted,
+        content: casualText,
+        directAnswer: casualText,
+        intent: 'CASUAL_CONVERSATION',
+        metrics: [],
+        evidence: [],
+      };
+    }
+
+    // 3. CAPABILITY QUERY
+    if (/^(what\s+can\s+you\s+do|what\s+are\s+your\s+capabilities|how\s+can\s+you\s+help(\s+me)?|what\s+do\s+you\s+do|help|what\s+features\s+do\s+you\s+have|what\s+can\s+i\s+ask(\s+you)?|how\s+does\s+this\s+work|what\s+is\s+datalens)$/i.test(qClean) || q.includes('what can you do') || q.includes('how can you help')) {
+      const capabilityText =
+        "Here is what I can do as your DataLens Business Intelligence Assistant:\n\n" +
+        "• **Metric Calculations**: Compute sums, averages, totals, counts, and custom ratios across 100% of your records.\n" +
+        "• **Rankings & Comparisons**: Identify top/bottom performers (e.g. products, regions, facilities) and category share.\n" +
+        "• **Trend & Time-Series Analysis**: Examine monthly, quarterly, or daily performance trends.\n" +
+        "• **Visual Insights**: Generate grounded bar charts, line graphs, donut charts, and structured data tables.\n" +
+        "• **Deterministic Verification**: 100% verified calculations with transparent calculation logic.\n" +
+        "• **Business Reports**: Save analyses, export CSV summaries, and add findings to executive reports.";
+      return {
+        id: `msg-a-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: nowFormatted,
+        content: capabilityText,
+        directAnswer: capabilityText,
+        intent: 'CAPABILITY_QUERY',
+        metrics: [],
+        evidence: [],
+        suggestedFollowUps: this.getSuggestedQuestions(dataset),
+      };
+    }
+
+    // 4. UNSUPPORTED REQUEST
+    if (/(write\s+(a\s+)?(poem|story|song|essay|joke)|tell\s+me\s+a\s+joke|what('s|\s+is)\s+the\s+weather|book\s+a\s+(flight|hotel)|who\s+won\s+the|translate\s+(this\s+)?to|who\s+is\s+the\s+president)/i.test(q) && !isAnalyticalRequest) {
+      const unsupportedText =
+        "I am DataLens, your specialized Business Intelligence and Data Analyst assistant. " +
+        "My capabilities focus on analyzing your uploaded datasets, calculating verified business metrics, and uncovering performance trends.\n\n" +
+        "I cannot assist with external tasks like web browsing, creative writing, or general trivia. How can I help you analyze your data?";
+      return {
+        id: `msg-a-${Date.now()}`,
+        sender: 'assistant',
+        timestamp: nowFormatted,
+        content: unsupportedText,
+        directAnswer: unsupportedText,
+        intent: 'UNSUPPORTED_REQUEST',
+        metrics: [],
+        evidence: [],
+      };
+    }
+
     // Helper: Column finders
     const findColumn = (patterns: string[]): string | undefined => {
       const match = columns.find((c) =>

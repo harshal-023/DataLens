@@ -50,6 +50,7 @@ export interface NLAMessageResponse {
   role: 'user' | 'assistant' | 'system';
   content: string;
   direct_answer?: string | null;
+  intent?: string | null;
   metric_cards: NLAMetricCard[];
   chart?: NLAChartData | null;
   table?: NLATableData | null;

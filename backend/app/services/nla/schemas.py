@@ -86,6 +86,7 @@ class NLAMessageResponse(BaseModel):
     chart_data: dict[str, Any] | None = None
     table_data: dict[str, Any] | None = None
     evidence_items: list[dict[str, Any]] = Field(default_factory=list)
+    suggested_follow_ups: list[str] = Field(default_factory=list)
     needs_clarification: bool = False
     clarification_options: list[str] = Field(default_factory=list)
     provider_used: str = "deterministic"

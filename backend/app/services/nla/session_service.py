@@ -2,6 +2,7 @@ import json
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,11 @@ from app.models.conversational_analytics import (
 from app.models.dataset import Dataset
 from app.models.dataset_version import DatasetVersion
 from app.services.ai.factory import AIProviderFactory
+from app.services.ai.intent_classifier import (
+    ConversationalResponseBuilder,
+    ConversationIntent,
+    IntentClassifier,
+)
 from app.services.nla.compiler import NLASafeQueryCompiler
 from app.services.nla.executor import NLAQueryExecutor
 from app.services.nla.planner import NLAQueryPlanner
@@ -70,6 +76,34 @@ class NLASessionService:
         return dataset, version, parquet_paths
 
     @classmethod
+    def _get_suggested_questions_for_schema(
+        cls, dataset_name: str, col_names: list[str]
+    ) -> list[str]:
+        cols_lower = [c.lower() for c in col_names]
+        has_rev = any(k in cols_lower for k in ("revenue", "sales", "amount", "price", "cost", "total"))
+        has_prod = any(k in cols_lower for k in ("product", "item", "plan", "sku", "facility", "category"))
+        has_reg = any(k in cols_lower for k in ("region", "country", "city", "state", "location", "territory"))
+        has_date = any(k in cols_lower for k in ("date", "order_date", "month", "created_at", "timestamp"))
+
+        qs: list[str] = []
+        if has_prod and has_rev:
+            qs.append("Which product generated the highest revenue?")
+        if has_date and has_rev:
+            qs.append("Show monthly revenue trend")
+        if has_reg and has_rev:
+            qs.append("Compare regional performance")
+        if not qs and has_rev:
+            qs.append("What is the total revenue?")
+        if not qs and has_prod:
+            qs.append("Breakdown by top products")
+        if not qs:
+            qs.extend([
+                f"Give me key insights for {dataset_name}",
+                "Show dataset summary and distribution",
+            ])
+        return qs[:3]
+
+    @classmethod
     async def execute_nl_query(
         cls,
         req: NLAQueryRequest,
@@ -117,6 +151,80 @@ class NLASessionService:
         )
         db.add(user_msg)
         await db.flush()
+
+        # 3.5 Intent Classification Layer
+        columns_meta: list[dict[str, Any]] = []
+        try:
+            storage_root = Path(settings.STORAGE_LOCAL_ROOT).resolve()
+            manifest_path = storage_root / version.storage_key
+            if manifest_path.is_file():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                columns_meta = manifest.get("columns", [])
+        except Exception:
+            pass
+        col_names = [c["name"] for c in columns_meta] if columns_meta else []
+
+        intent = IntentClassifier.classify(
+            question=req.question,
+            conversation_history=[{"role": "user", "content": req.question}],
+            active_context=session.active_context,
+            columns=col_names,
+        )
+
+        # Handle Conversational & Non-Analytical Intents (Zero DuckDB query execution)
+        if intent in (
+            ConversationIntent.GREETING,
+            ConversationIntent.CASUAL_CONVERSATION,
+            ConversationIntent.CAPABILITY_QUERY,
+            ConversationIntent.UNSUPPORTED_REQUEST,
+            ConversationIntent.DATA_EXPLANATION,
+        ):
+            suggested_qs = cls._get_suggested_questions_for_schema(dataset.name, col_names)
+
+            if intent == ConversationIntent.GREETING:
+                conv_res = ConversationalResponseBuilder.build_greeting_response(
+                    dataset_name=dataset.name,
+                    row_count=version.row_count,
+                    suggested_questions=suggested_qs,
+                )
+            elif intent == ConversationIntent.CASUAL_CONVERSATION:
+                conv_res = ConversationalResponseBuilder.build_casual_response(req.question)
+            elif intent == ConversationIntent.CAPABILITY_QUERY:
+                conv_res = ConversationalResponseBuilder.build_capability_response(
+                    dataset_name=dataset.name,
+                    suggested_questions=suggested_qs,
+                )
+            elif intent == ConversationIntent.UNSUPPORTED_REQUEST:
+                conv_res = ConversationalResponseBuilder.build_unsupported_response(req.question)
+            else:  # DATA_EXPLANATION
+                conv_res = ConversationalResponseBuilder.build_explanation_response(
+                    question=req.question,
+                    columns_meta=columns_meta,
+                    previous_result=session.active_context,
+                )
+
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            assistant_msg = NLAMessage(
+                session_id=session.id,
+                sender="assistant",
+                content=conv_res["content"],
+                direct_answer=conv_res["direct_answer"],
+                intent=conv_res["intent"],
+                plan_json={"suggested_follow_ups": conv_res.get("suggested_follow_ups", [])},
+                results_summary=None,
+                metric_cards=[],
+                chart_data=None,
+                table_data=None,
+                evidence_items=[],
+                needs_clarification=False,
+                clarification_options=[],
+                provider_used="conversational_router",
+                execution_duration_ms=duration_ms,
+            )
+            db.add(assistant_msg)
+            await db.commit()
+            await db.refresh(assistant_msg)
+            return assistant_msg
 
         # 4. Formulate Analytical Plan
         plan, metric_formula = await NLAQueryPlanner.formulate_plan(

@@ -324,6 +324,7 @@ export interface AskMessage {
   timestamp: string;
   content: string;
   directAnswer?: string;
+  intent?: string;
   metrics?: { label: string; value: string; trend?: string; isPositive?: boolean }[];
   chartData?: {
     type: 'bar' | 'line' | 'pie';
