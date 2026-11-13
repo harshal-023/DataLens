@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+backend/.venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Storage & test caches
+backend/storage_data/
+storage_data/
+*.duckdb
+*.parquet
+*.dump
+*.tar.gz
+.pytest_cache/
+.ruff_cache/
+
