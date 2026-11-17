@@ -256,7 +256,8 @@ def test_conversational_response_builder_unsupported():
 # =====================================================================
 
 
-def test_orchestrator_routes_greeting_without_duckdb_execution():
+@pytest.mark.asyncio
+async def test_orchestrator_routes_greeting_without_duckdb_execution():
     """Verify that calling process_question with 'Hello' never queries DuckDB or computes metrics."""
     mock_db = AsyncMock()
     mock_dataset = Dataset(
@@ -279,7 +280,7 @@ def test_orchestrator_routes_greeting_without_duckdb_execution():
     ]
 
     with patch("app.services.analytics.engine.AnalyticsEngine.compute_aggregation") as mock_agg:
-        coro = AIAnalyticsOrchestrator.process_question(
+        response = await AIAnalyticsOrchestrator.process_question(
             question="Hello DataLens!",
             dataset=mock_dataset,
             version=mock_version,
@@ -288,11 +289,6 @@ def test_orchestrator_routes_greeting_without_duckdb_execution():
             user_id=uuid.uuid4(),
             db=mock_db,
         )
-        try:
-            coro.send(None)
-            response = None
-        except StopIteration as e:
-            response = e.value
 
         # Assert DuckDB aggregation was NEVER executed
         mock_agg.assert_not_called()
@@ -307,7 +303,8 @@ def test_orchestrator_routes_greeting_without_duckdb_execution():
         assert len(response.suggested_follow_ups) > 0
 
 
-def test_orchestrator_routes_casual_chat_without_duckdb_execution():
+@pytest.mark.asyncio
+async def test_orchestrator_routes_casual_chat_without_duckdb_execution():
     """Verify that 'thanks' returns conversational response without analytical computation."""
     mock_db = AsyncMock()
     mock_dataset = Dataset(
@@ -326,7 +323,7 @@ def test_orchestrator_routes_casual_chat_without_duckdb_execution():
     )
 
     with patch("app.services.analytics.engine.AnalyticsEngine.compute_aggregation") as mock_agg:
-        coro = AIAnalyticsOrchestrator.process_question(
+        response = await AIAnalyticsOrchestrator.process_question(
             question="Thanks a lot!",
             dataset=mock_dataset,
             version=mock_version,
@@ -335,11 +332,6 @@ def test_orchestrator_routes_casual_chat_without_duckdb_execution():
             user_id=uuid.uuid4(),
             db=mock_db,
         )
-        try:
-            coro.send(None)
-            response = None
-        except StopIteration as e:
-            response = e.value
 
         mock_agg.assert_not_called()
         assert response is not None
@@ -349,10 +341,9 @@ def test_orchestrator_routes_casual_chat_without_duckdb_execution():
         assert "welcome" in response.direct_answer.lower()
 
 
-def test_conversational_response_builder_async_gemini_mocked():
+@pytest.mark.asyncio
+async def test_conversational_response_builder_async_gemini_mocked():
     """Verify build_conversational_response_async formats prompt and returns Gemini output."""
-    import asyncio
-
     class MockGemini:
         async def generate_text(self, *args, **kwargs):
             return {
@@ -362,14 +353,12 @@ def test_conversational_response_builder_async_gemini_mocked():
                 "provider": "gemini",
             }
 
-    res = asyncio.run(
-        ConversationalResponseBuilder.build_conversational_response_async(
-            question="Hello there",
-            intent=ConversationIntent.GREETING,
-            dataset_name="Retail_Sales",
-            row_count=5000,
-            provider=MockGemini(),
-        )
+    res = await ConversationalResponseBuilder.build_conversational_response_async(
+        question="Hello there",
+        intent=ConversationIntent.GREETING,
+        dataset_name="Retail_Sales",
+        row_count=5000,
+        provider=MockGemini(),
     )
 
     assert res["provider"] == "gemini"
@@ -379,21 +368,18 @@ def test_conversational_response_builder_async_gemini_mocked():
     assert res["chart_data"] is None
 
 
-def test_conversational_response_builder_async_fallback_when_gemini_fails():
+@pytest.mark.asyncio
+async def test_conversational_response_builder_async_fallback_when_gemini_fails():
     """Verify build_conversational_response_async gracefully falls back to deterministic rules if Gemini errors."""
-    import asyncio
-
     class FailingGemini:
         async def generate_text(self, *args, **kwargs):
             raise Exception("API quota exceeded")
 
-    res = asyncio.run(
-        ConversationalResponseBuilder.build_conversational_response_async(
-            question="What can you do?",
-            intent=ConversationIntent.CAPABILITY_QUERY,
-            dataset_name="Retail_Sales",
-            provider=FailingGemini(),
-        )
+    res = await ConversationalResponseBuilder.build_conversational_response_async(
+        question="What can you do?",
+        intent=ConversationIntent.CAPABILITY_QUERY,
+        dataset_name="Retail_Sales",
+        provider=FailingGemini(),
     )
 
     assert res["provider"] == "deterministic_fallback"

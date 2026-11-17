@@ -604,7 +604,7 @@ class DashboardAnalyticsExecutor:
                         cursor = con.execute(query)
                         cols_names = [d[0] for d in (cursor.description or [])]
                         raw_rows = cursor.fetchall()
-                        rows_list = [dict(zip(cols_names, r)) for r in raw_rows]
+                        rows_list = [dict(zip(cols_names, r, strict=False)) for r in raw_rows]
                         calculated_data = {
                             "columns": cols_names,
                             "rows": rows_list,
