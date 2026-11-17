@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints.ai import router as ai_router
 from app.api.v1.endpoints.analytics import router as analytics_router
 from app.api.v1.endpoints.auth import router as auth_router
+from app.api.v1.endpoints.auto_dashboard import router as auto_dashboard_router
 from app.api.v1.endpoints.automation import router as automation_router
 from app.api.v1.endpoints.business_analyst import router as business_analyst_router
 from app.api.v1.endpoints.comments import router as comments_router
@@ -56,6 +57,7 @@ api_v1_router.include_router(connections_router)
 
 # Mount Dashboard Builder endpoints
 api_v1_router.include_router(dashboards_router)
+api_v1_router.include_router(auto_dashboard_router)
 
 # Mount Data Transformation endpoints
 api_v1_router.include_router(transformations_router)

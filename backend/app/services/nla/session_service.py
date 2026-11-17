@@ -181,27 +181,16 @@ class NLASessionService:
         ):
             suggested_qs = cls._get_suggested_questions_for_schema(dataset.name, col_names)
 
-            if intent == ConversationIntent.GREETING:
-                conv_res = ConversationalResponseBuilder.build_greeting_response(
-                    dataset_name=dataset.name,
-                    row_count=version.row_count,
-                    suggested_questions=suggested_qs,
-                )
-            elif intent == ConversationIntent.CASUAL_CONVERSATION:
-                conv_res = ConversationalResponseBuilder.build_casual_response(req.question)
-            elif intent == ConversationIntent.CAPABILITY_QUERY:
-                conv_res = ConversationalResponseBuilder.build_capability_response(
-                    dataset_name=dataset.name,
-                    suggested_questions=suggested_qs,
-                )
-            elif intent == ConversationIntent.UNSUPPORTED_REQUEST:
-                conv_res = ConversationalResponseBuilder.build_unsupported_response(req.question)
-            else:  # DATA_EXPLANATION
-                conv_res = ConversationalResponseBuilder.build_explanation_response(
-                    question=req.question,
-                    columns_meta=columns_meta,
-                    previous_result=session.active_context,
-                )
+            conv_res = await ConversationalResponseBuilder.build_conversational_response_async(
+                question=req.question,
+                intent=intent,
+                dataset_name=dataset.name,
+                row_count=version.row_count,
+                columns=columns_meta,
+                conversation_history=[{"role": "user", "content": req.question}],
+                previous_result=session.active_context,
+                suggested_questions=suggested_qs,
+            )
 
             duration_ms = int((time.perf_counter() - start_time) * 1000)
             assistant_msg = NLAMessage(

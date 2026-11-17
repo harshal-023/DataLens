@@ -124,6 +124,16 @@ class ScheduleCreateRequest(BaseModel):
     config: dict[str, Any] | None = None
 
 
+class ScheduleUpdateRequest(BaseModel):
+    name: str | None = None
+    frequency: Literal["daily", "weekly", "monthly", "on_refresh", "on_pipeline"] | None = None
+    cron_expression: str | None = None
+    timezone: str | None = None
+    is_active: bool | None = None
+    dataset_id: uuid.UUID | None = None
+    config: dict[str, Any] | None = None
+
+
 class ScheduleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -93,3 +93,4 @@ VITE_APP_TITLE="DataLens Business Intelligence"
 2. **Rotating Secrets**:
    - If `SECRET_KEY` is rotated in production, active user sessions will be invalidated, requiring users to log in again.
    - Database credentials can be changed in Neon without affecting application code by updating `DATABASE_URL` in the Render environment variables dashboard.
+

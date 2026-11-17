@@ -145,6 +145,28 @@ vi.mock('../services/apiClient', () => ({
     }
 
     // 7. Schedules CRUD
+    if (url.includes('/run') && options?.method === 'POST') {
+      return {
+        success: true,
+        run_id: 'run-manual-1',
+        insights_generated: 4,
+        status: 'completed',
+      };
+    }
+
+    if (url.includes('/business-analyst/schedules') && options?.method === 'PATCH') {
+      const body = JSON.parse(options.body);
+      return {
+        id: 'sched-1',
+        workspace_id: 'ws-123',
+        name: body.name || 'Daily Morning Sweep',
+        frequency: body.frequency || 'daily',
+        is_active: body.is_active !== undefined ? body.is_active : true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+
     if (url.includes('/business-analyst/schedules') && options?.method === 'POST') {
       const body = JSON.parse(options.body);
       return {
@@ -192,7 +214,8 @@ describe('BusinessAnalystService (AI Business Analyst & Autonomous Insights)', (
     const overview: ExecutiveOverview = await BusinessAnalystService.getOverview(wsId, dsId);
 
     expect(apiClient).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/business-analyst/overview')
+      expect.stringContaining('/api/v1/business-analyst/overview'),
+      expect.objectContaining({ workspaceId: wsId })
     );
     expect(overview.total_insights_count).toBe(12);
     expect(overview.critical_risks_count).toBe(2);
@@ -267,6 +290,15 @@ describe('BusinessAnalystService (AI Business Analyst & Autonomous Insights)', (
 
     const schedules = await BusinessAnalystService.getSchedules(wsId);
     expect(schedules.length).toBe(1);
+
+    // Toggle active
+    const paused = await BusinessAnalystService.toggleScheduleActive('sched-1', wsId, false);
+    expect(paused.is_active).toBe(false);
+
+    // Run now
+    const runResult = await BusinessAnalystService.runScheduleNow('sched-1', wsId);
+    expect(runResult.success).toBe(true);
+    expect(runResult.insights_generated).toBe(4);
 
     const del = await BusinessAnalystService.deleteSchedule('sched-1', wsId);
     expect(del.success).toBe(true);

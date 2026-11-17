@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 from pathlib import Path
 from typing import Annotated, Any
@@ -21,10 +22,13 @@ from app.models.dataset_version import DatasetVersion
 from app.models.user import User
 from app.models.workspace import Workspace
 from app.services.ai.factory import AIProviderFactory
+from app.services.ai.intent_classifier import ConversationalResponseBuilder, IntentClassifier
 from app.services.ai.orchestrator import AIAnalyticsOrchestrator
 from app.services.ai.schemas import (
     AIAskRequest,
     AIAskResponse,
+    AIChatRequest,
+    AIChatResponse,
     AIClarifyRequest,
     AIExplainRequest,
     AIExplainResponse,
@@ -233,6 +237,72 @@ async def explain_analysis(
         analysis_run_id=str(analysis_run.id),
         explanation=explanation,
     )
+
+
+# ---------------------------------------------------------------------------
+# Conversational AI Chat Endpoint (Google Gemini Mobile-App Experience)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/chat", response_model=AIChatResponse)
+async def chat_with_ai(
+    req: AIChatRequest,
+    current_user: Annotated[User, Depends(require_active_user)],
+) -> AIChatResponse:
+    """
+    Direct conversational AI chatbot endpoint powered by Google Gemini.
+    Delivers fluid, articulate, conversational BI assistance matching ChatGPT and the Gemini mobile app.
+    Works seamlessly with or without an active backend dataset.
+    """
+    start_time = time.perf_counter()
+
+    col_names = []
+    if req.columns:
+        col_names = [c["name"] if isinstance(c, dict) and "name" in c else str(c) for c in req.columns]
+
+    formatted_history = None
+    if req.conversation_history:
+        formatted_history = [
+            {"role": m.role, "content": m.content}
+            for m in req.conversation_history
+        ]
+
+    # Classify incoming message intent
+    intent = IntentClassifier.classify(
+        question=req.message,
+        conversation_history=formatted_history,
+        columns=col_names,
+    )
+
+    suggested_qs = [
+        "Which product generated the highest revenue?",
+        "Show monthly revenue trend",
+        "Compare regional performance",
+        "What are the top key metrics?",
+    ]
+
+    conv_res = await ConversationalResponseBuilder.build_conversational_response_async(
+        question=req.message,
+        intent=intent,
+        dataset_name=req.dataset_name,
+        row_count=req.row_count,
+        columns=req.columns,
+        conversation_history=formatted_history,
+        suggested_questions=suggested_qs,
+    )
+
+    latency_ms = conv_res.get("latency_ms") or int((time.perf_counter() - start_time) * 1000)
+
+    return AIChatResponse(
+        direct_answer=conv_res["direct_answer"],
+        content=conv_res["content"],
+        intent=conv_res["intent"],
+        suggested_follow_ups=conv_res.get("suggested_follow_ups", suggested_qs[:3]),
+        latency_ms=latency_ms,
+        provider=conv_res.get("provider", "gemini"),
+        model=conv_res.get("model", ""),
+    )
+
 
 
 # ---------------------------------------------------------------------------

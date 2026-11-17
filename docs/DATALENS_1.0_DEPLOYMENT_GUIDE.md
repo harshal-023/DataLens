@@ -125,3 +125,4 @@ Test the live deployment from terminal:
    - Create a dashboard with charts and filters.
    - Execute an AI Autonomous Insight audit.
    - Export an executive report in PDF format.
+

@@ -27,10 +27,14 @@ Thumbs.db
 # Storage & test caches
 backend/storage_data/
 storage_data/
+backup_drill_artifacts/
 *.duckdb
 *.parquet
 *.dump
 *.tar.gz
+*.log
 .pytest_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 

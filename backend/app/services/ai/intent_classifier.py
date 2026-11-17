@@ -10,6 +10,8 @@ import re
 from enum import StrEnum
 from typing import Any
 
+from app.services.ai.factory import AIProviderFactory
+
 logger = logging.getLogger("datalens.ai.intent")
 
 
@@ -216,6 +218,143 @@ class ConversationalResponseBuilder:
     (GREETING, CASUAL_CONVERSATION, CAPABILITY_QUERY, UNSUPPORTED_REQUEST, etc.)
     with zero DuckDB or dataset query execution.
     """
+
+    @classmethod
+    async def build_conversational_response_async(
+        cls,
+        question: str,
+        intent: ConversationIntent | str,
+        dataset_name: str | None = None,
+        row_count: int | None = None,
+        columns: list[Any] | None = None,
+        conversation_history: list[dict[str, str]] | None = None,
+        previous_result: dict[str, Any] | None = None,
+        suggested_questions: list[str] | None = None,
+        provider: Any | None = None,
+    ) -> dict[str, Any]:
+        """
+        Generates a rich, fluid conversational response using Google Gemini (gemini-3.1-flash-lite)
+        giving the user the intelligent, articulate experience of ChatGPT or the Gemini mobile app.
+        Gracefully falls back to deterministic rule builders if Gemini is unavailable or rate-limited.
+        """
+        intent_str = intent.value if isinstance(intent, ConversationIntent) else str(intent)
+
+        # 1. Attempt Gemini Generation
+        try:
+            gemini = provider or AIProviderFactory.get_gemini_provider()
+            if gemini:
+                system_instruction = (
+                    "You are DataLens AI, an enterprise-grade conversational Business Intelligence Assistant and expert Data Analyst. "
+                    "You communicate with the fluid intelligence, warmth, professional clarity, and formatting elegance of the Google Gemini and ChatGPT mobile applications.\n\n"
+                    "CORE PRINCIPLES:\n"
+                    "1. Provide articulate, direct, and helpful answers.\n"
+                    "2. Use clean Markdown: bold key metrics and terms, use clear concise bullet points or numbered lists, and short headings when helpful.\n"
+                    "3. Tone: professional, confident, approachable, and focused on business value.\n"
+                    "4. When discussing data or capabilities, explain how DataLens provides deterministic calculations, time-series trends, categorical rankings, and executive insights.\n"
+                    "5. Respect active dataset context if provided. If no dataset is active, offer friendly guidance on what datasets can be loaded.\n"
+                    "6. Keep replies concise and readable (typically 2-4 short paragraphs or bulleted points).\n"
+                    "7. Never hallucinate fake database records or claim unverified external facts as dataset facts."
+                )
+
+                # Format dataset schema context
+                context_parts = []
+                if dataset_name:
+                    record_str = f" ({row_count:,} records)" if row_count else ""
+                    context_parts.append(f"Active Dataset: **{dataset_name}**{record_str}")
+                if columns:
+                    col_names = [c["name"] if isinstance(c, dict) else str(c) for c in columns[:25]]
+                    context_parts.append(f"Available Columns: {', '.join(col_names)}")
+                if previous_result:
+                    summary = previous_result.get("summary") or previous_result.get("direct_answer")
+                    if summary:
+                        context_parts.append(f"Previous Analysis Context: {summary[:300]}")
+
+                # Format conversation history
+                history_text = ""
+                if conversation_history:
+                    h_lines = []
+                    for msg in conversation_history[-6:]:
+                        role = "User" if msg.get("role") == "user" else "Assistant"
+                        cnt = str(msg.get("content", ""))[:400]
+                        h_lines.append(f"{role}: {cnt}")
+                    if h_lines:
+                        history_text = "Recent Conversation History:\n" + "\n".join(h_lines) + "\n\n"
+
+                dataset_context_block = ("\n".join(context_parts) + "\n\n") if context_parts else ""
+
+                user_prompt = (
+                    f"{dataset_context_block}"
+                    f"{history_text}"
+                    f"User Intent: {intent_str}\n"
+                    f"User Message: {question}\n\n"
+                    f"Please provide an intelligent, conversational response tailored to DataLens BI:"
+                )
+
+                gen_result = await gemini.generate_text(
+                    prompt=user_prompt,
+                    system_instruction=system_instruction,
+                    temperature=0.6,
+                    max_tokens=800,
+                )
+
+                reply_text = gen_result.get("text", "").strip()
+                if reply_text:
+                    follow_ups = suggested_questions or [
+                        "Which product generated the highest revenue?",
+                        "Show monthly revenue trend",
+                        "Compare regional performance",
+                    ]
+                    return {
+                        "direct_answer": reply_text,
+                        "content": reply_text,
+                        "intent": intent_str,
+                        "metric_cards": [],
+                        "chart_data": None,
+                        "table_data": None,
+                        "evidence_items": [],
+                        "suggested_follow_ups": follow_ups[:4],
+                        "needs_clarification": False,
+                        "clarification_options": [],
+                        "latency_ms": gen_result.get("latency_ms", 0),
+                        "provider": "gemini",
+                        "model": gen_result.get("model", ""),
+                    }
+        except Exception as e:
+            logger.warning(
+                "Gemini conversational response generation encountered an error: %s. Falling back to deterministic builder.",
+                e,
+            )
+
+        # 2. Fallback to Deterministic Builders
+        if intent == ConversationIntent.GREETING or intent_str == ConversationIntent.GREETING.value:
+            res = cls.build_greeting_response(
+                dataset_name=dataset_name,
+                row_count=row_count,
+                suggested_questions=suggested_questions,
+            )
+        elif intent == ConversationIntent.CASUAL_CONVERSATION or intent_str == ConversationIntent.CASUAL_CONVERSATION.value:
+            res = cls.build_casual_response(question)
+        elif intent == ConversationIntent.CAPABILITY_QUERY or intent_str == ConversationIntent.CAPABILITY_QUERY.value:
+            res = cls.build_capability_response(
+                dataset_name=dataset_name,
+                suggested_questions=suggested_questions,
+            )
+        elif intent == ConversationIntent.UNSUPPORTED_REQUEST or intent_str == ConversationIntent.UNSUPPORTED_REQUEST.value:
+            res = cls.build_unsupported_response(question)
+        elif intent == ConversationIntent.DATA_EXPLANATION or intent_str == ConversationIntent.DATA_EXPLANATION.value:
+            cols_meta = columns if (columns and isinstance(columns[0], dict)) else None
+            res = cls.build_explanation_response(
+                question=question,
+                columns_meta=cols_meta,
+                previous_result=previous_result,
+            )
+        else:
+            res = cls.build_casual_response(question)
+
+        res["latency_ms"] = 0
+        res["provider"] = "deterministic_fallback"
+        res["model"] = "rules"
+        return res
 
     @classmethod
     def build_greeting_response(

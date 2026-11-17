@@ -96,20 +96,31 @@ class BusinessInsightEngine:
         storage_root = Path(settings.STORAGE_LOCAL_ROOT).resolve()
         parquet_files = []
         if getattr(target_version, "storage_key", None):
-            manifest_or_parquet = storage_root / target_version.storage_key
+            cleaned_key = str(target_version.storage_key).strip().replace("\\", "/")
+            direct_path = Path(cleaned_key)
+            if direct_path.is_file():
+                manifest_or_parquet = direct_path
+            else:
+                manifest_or_parquet = storage_root / cleaned_key
+
             if manifest_or_parquet.is_file():
-                if target_version.storage_key.endswith(".json"):
+                if cleaned_key.endswith(".json"):
                     try:
                         manifest = json.loads(manifest_or_parquet.read_text(encoding="utf-8"))
-                        parquet_files = [storage_root / p for p in manifest.get("parts", []) if (storage_root / p).is_file()]
+                        for p in manifest.get("parts", []):
+                            part_clean = str(p).strip().replace("\\", "/")
+                            part_path = Path(part_clean) if Path(part_clean).is_file() else (storage_root / part_clean)
+                            if part_path.is_file():
+                                parquet_files.append(part_path)
                     except Exception:
                         pass
-                elif target_version.storage_key.endswith(".parquet"):
+                elif cleaned_key.endswith(".parquet"):
                     parquet_files = [manifest_or_parquet]
 
         if not parquet_files:
             for p in (getattr(target_version, "storage_paths", None) or []):
-                cand = storage_root / str(p).strip().replace("\\", "/")
+                p_clean = str(p).strip().replace("\\", "/")
+                cand = Path(p_clean) if Path(p_clean).is_file() else (storage_root / p_clean)
                 if cand.is_file():
                     parquet_files.append(cand)
 
@@ -117,6 +128,19 @@ class BusinessInsightEngine:
             candidate = storage_root / "datasets" / str(dataset.id) / f"{target_version.id}.parquet"
             if candidate.is_file():
                 parquet_files = [candidate]
+
+        if not parquet_files:
+            dataset_dir = storage_root / "datasets" / str(dataset.id)
+            if dataset_dir.is_dir():
+                found_parquets = list(dataset_dir.glob("*.parquet"))
+                if found_parquets:
+                    parquet_files = [found_parquets[0]]
+
+        if not parquet_files:
+            raise DataLensException(
+                f"No analytical data files (parquet) found for dataset version {target_version.id}. Please re-upload or refresh the dataset.",
+                code="STORAGE_FILE_MISSING",
+            )
 
         # Initialize Generation Run Record
         run_record = InsightGenerationRun(
@@ -152,11 +176,14 @@ class BusinessInsightEngine:
             dim_cols = [m.column_name for m in mappings if m.is_dimension and not m.is_primary_key]
             measure_cols = [m.column_name for m in mappings if m.is_measure]
 
-            if not mappings and target_version.schema_metadata:
+            if (not date_col or not measure_cols or not dim_cols) and target_version.schema_metadata:
                 cols = target_version.schema_metadata.get("columns", [])
-                date_col = next((c["name"] for c in cols if any(k in c.get("inferred_type", "").lower() for k in ("date", "time")) or c["name"].lower() in ("date", "timestamp", "order_date")), None)
-                measure_cols = [c["name"] for c in cols if any(k in c.get("inferred_type", "").lower() for k in ("int", "float", "num", "double", "decimal"))]
-                dim_cols = [c["name"] for c in cols if c["name"] != date_col and c["name"] not in measure_cols]
+                if not date_col:
+                    date_col = next((c["name"] for c in cols if any(k in c.get("inferred_type", "").lower() for k in ("date", "time", "timestamp")) or c["name"].lower() in ("date", "timestamp", "order_date", "created_at", "trans_date", "datetime")), None)
+                if not measure_cols:
+                    measure_cols = [c["name"] for c in cols if any(k in c.get("inferred_type", "").lower() for k in ("int", "float", "num", "double", "decimal", "real"))]
+                if not dim_cols:
+                    dim_cols = [c["name"] for c in cols if c["name"] != date_col and c["name"] not in measure_cols]
             
             raw_findings: list[dict[str, Any]] = []
 
@@ -329,11 +356,16 @@ class BusinessInsightEngine:
         if dataset_id:
             base_query = base_query.where(BusinessInsight.dataset_id == dataset_id)
 
-        res = await db.execute(base_query.options(selectinload(BusinessInsight.evidence_items)))
+        res = await db.execute(
+            base_query.options(
+                selectinload(BusinessInsight.evidence_items),
+                selectinload(BusinessInsight.comments).selectinload(InsightComment.author),
+            )
+        )
         all_insights = res.scalars().all()
 
         critical_risks = [i for i in all_insights if i.category == "risk" and i.severity in ("CRITICAL", "HIGH")]
-        opportunities = [i for i in all_insights if i.category == "opportunity" and i.severity in ("CRITICAL", "HIGH")]
+        opportunities = [i for i in all_insights if i.category == "opportunity"]
         anomalies = [i for i in all_insights if i.category == "anomaly"]
 
         # Top movements

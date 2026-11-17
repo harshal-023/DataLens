@@ -101,3 +101,4 @@ flowchart TD
 2. **Encrypted Transport**: All inter-service communications enforce TLS 1.3 / HTTPS.
 3. **Cookie Security**: `HttpOnly=True`, `SameSite=Lax`, `Secure=True` enforced in production mode.
 4. **Credential Masking**: All third-party data source credentials encrypted with AES-256 before insertion into PostgreSQL.
+

@@ -441,7 +441,35 @@ export interface AIStatusResponsePayload {
   error?: string | null;
 }
 
+export interface AIChatRequestPayload {
+  message: string;
+  dataset_id?: string;
+  dataset_name?: string;
+  columns?: any[];
+  row_count?: number;
+  conversation_history?: Array<{ role: string; content: string }>;
+  workspace_id?: string;
+}
+
+export interface AIChatResponsePayload {
+  direct_answer: string;
+  content: string;
+  intent: string;
+  suggested_follow_ups: string[];
+  latency_ms: number;
+  provider: string;
+  model: string;
+}
+
 export const AiApi = {
+  async chat(workspaceId: string | undefined, req: AIChatRequestPayload): Promise<AIChatResponsePayload> {
+    return apiClient<AIChatResponsePayload>('/api/v1/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify(req),
+      ...(workspaceId ? { workspaceId } : {}),
+    });
+  },
+
   async getStatus(workspaceId?: string): Promise<AIStatusResponsePayload> {
     return apiClient<AIStatusResponsePayload>('/api/v1/ai/status', {
       method: 'GET',

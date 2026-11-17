@@ -27,6 +27,9 @@ const DashboardList = lazy(() =>
 const DashboardEditor = lazy(() =>
   import('./pages/dashboards/DashboardEditor').then((m) => ({ default: m.DashboardEditor }))
 );
+const AutoDashboardWizard = lazy(() =>
+  import('./pages/dashboards/AutoDashboardWizard').then((m) => ({ default: m.AutoDashboardWizard }))
+);
 const DataPreparationList = lazy(() =>
   import('./pages/data-prep/DataPreparationList').then((m) => ({ default: m.DataPreparationList }))
 );
@@ -125,6 +128,7 @@ export const App: React.FC = () => {
 
               {/* Interactive Dashboards */}
               <Route path="/dashboards" element={<DashboardList />} />
+              <Route path="/dashboards/auto-generate" element={<AutoDashboardWizard />} />
               <Route path="/dashboards/:dashboardId" element={<DashboardEditor />} />
 
               {/* Data Preparation & Transformation Engine */}

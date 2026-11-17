@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, status
@@ -28,6 +29,7 @@ from app.services.business_analyst.schemas import (
     InsightStatusUpdateRequest,
     ScheduleCreateRequest,
     ScheduleResponse,
+    ScheduleUpdateRequest,
 )
 
 router = APIRouter(prefix="/business-analyst", tags=["AI Business Analyst"])
@@ -470,6 +472,17 @@ async def list_run_history(
     ]
 
 
+def calculate_next_run(frequency: str, base_time: datetime | None = None) -> datetime | None:
+    now = base_time or datetime.now(UTC)
+    if frequency == "daily":
+        return now + timedelta(days=1)
+    elif frequency == "weekly":
+        return now + timedelta(weeks=1)
+    elif frequency == "monthly":
+        return now + timedelta(days=30)
+    return None
+
+
 # Schedules CRUD
 @router.post("/schedules", response_model=ScheduleResponse, status_code=status.HTTP_201_CREATED)
 async def create_schedule(
@@ -491,6 +504,7 @@ async def create_schedule(
         timezone=req.timezone,
         is_active=True,
         config=req.config,
+        next_run_at=calculate_next_run(req.frequency),
     )
     db.add(sched)
     await db.commit()
@@ -516,6 +530,91 @@ async def list_schedules(
     res = await db.execute(stmt)
     scheds = res.scalars().all()
     return [ScheduleResponse.model_validate(s) for s in scheds]
+
+
+@router.patch("/schedules/{schedule_id}", response_model=ScheduleResponse, status_code=status.HTTP_200_OK)
+async def update_schedule(
+    schedule_id: uuid.UUID,
+    req: ScheduleUpdateRequest,
+    current_user: Annotated[User, Depends(require_active_user)],
+    ws_context: Annotated[
+        tuple[Workspace, str],
+        Depends(require_workspace_role(["owner", "admin", "editor"])),
+    ],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ScheduleResponse:
+    workspace, _ = ws_context
+    stmt = select(InsightGenerationSchedule).where(
+        InsightGenerationSchedule.id == schedule_id,
+        InsightGenerationSchedule.workspace_id == workspace.id,
+    )
+    res = await db.execute(stmt)
+    sched = res.scalar_one_or_none()
+    if not sched:
+        raise DataLensException("Schedule not found.", code="NOT_FOUND")
+
+    if req.name is not None:
+        sched.name = req.name
+    if req.frequency is not None:
+        sched.frequency = req.frequency
+        sched.next_run_at = calculate_next_run(sched.frequency)
+    if req.cron_expression is not None:
+        sched.cron_expression = req.cron_expression
+    if req.timezone is not None:
+        sched.timezone = req.timezone
+    if req.is_active is not None:
+        sched.is_active = req.is_active
+    if req.dataset_id is not None:
+        sched.dataset_id = req.dataset_id
+    if req.config is not None:
+        sched.config = req.config
+
+    await db.commit()
+    await db.refresh(sched)
+    return ScheduleResponse.model_validate(sched)
+
+
+@router.post("/schedules/{schedule_id}/run", response_model=dict[str, Any], status_code=status.HTTP_200_OK)
+async def run_schedule_now(
+    schedule_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_active_user)],
+    ws_context: Annotated[
+        tuple[Workspace, str],
+        Depends(require_workspace_role(["owner", "admin", "editor"])),
+    ],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    workspace, _ = ws_context
+    stmt = select(InsightGenerationSchedule).where(
+        InsightGenerationSchedule.id == schedule_id,
+        InsightGenerationSchedule.workspace_id == workspace.id,
+    )
+    res = await db.execute(stmt)
+    sched = res.scalar_one_or_none()
+    if not sched:
+        raise DataLensException("Schedule not found.", code="NOT_FOUND")
+
+    if not sched.dataset_id:
+        raise DataLensException("Schedule does not have an associated dataset to run.", code="BAD_REQUEST")
+
+    run_record = await BusinessInsightEngine.generate_insights_for_dataset(
+        dataset_id=sched.dataset_id,
+        workspace_id=workspace.id,
+        user_id=current_user.id,
+        db=db,
+        trigger_type="scheduled",
+    )
+
+    sched.last_run_at = datetime.now(UTC)
+    sched.next_run_at = calculate_next_run(sched.frequency, sched.last_run_at)
+    await db.commit()
+
+    return {
+        "success": True,
+        "run_id": str(run_record.id),
+        "insights_generated": run_record.insights_generated_count,
+        "status": run_record.status,
+    }
 
 
 @router.delete("/schedules/{schedule_id}", status_code=status.HTTP_200_OK)

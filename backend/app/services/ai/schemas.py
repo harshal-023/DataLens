@@ -237,3 +237,34 @@ class AIOllamaModelsResponse(BaseModel):
     base_url: str
     models: list[str] = Field(default_factory=list)
     error: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Conversational AI Chat Models (Gemini Mobile-App Experience)
+# ---------------------------------------------------------------------------
+
+
+class AIChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class AIChatRequest(BaseModel):
+    message: str
+    dataset_id: str | None = None
+    dataset_name: str | None = None
+    columns: list[Any] | None = None
+    row_count: int | None = None
+    conversation_history: list[AIChatMessage] | None = None
+    workspace_id: uuid.UUID | None = None
+
+
+class AIChatResponse(BaseModel):
+    direct_answer: str
+    content: str
+    intent: str
+    suggested_follow_ups: list[str] = Field(default_factory=list)
+    latency_ms: int = 0
+    provider: str = "gemini"
+    model: str = ""
+

@@ -116,3 +116,4 @@ Executed via `npm test`:
 - **Ruff linter:** All checks passed.
 - **TypeScript (`tsc --noEmit`):** 0 errors.
 - **Vite production build (`npm run build`):** Built successfully in 9.91s (`dist/index.html`, zero errors).
+

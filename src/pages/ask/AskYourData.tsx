@@ -196,6 +196,11 @@ export const AskYourData: React.FC = () => {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedDataset?.id || '');
       const wsId = getActiveWorkspaceId();
 
+      const chatHistory = sessionToUpdate.messages.slice(-6).map((m) => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.content || m.directAnswer || '',
+      }));
+
       if (isUuid && wsId) {
         try {
           const backendSessionId = prevMsg?.backendSessionId;
@@ -213,15 +218,10 @@ export const AskYourData: React.FC = () => {
         } catch (nlaErr) {
           console.warn('NLA API query error, falling back to legacy AI or local engine:', nlaErr);
           try {
-            const history = sessionToUpdate.messages.slice(-5).map((m) => ({
-              role: m.sender === 'user' ? 'user' : 'assistant',
-              content: m.content || m.directAnswer || '',
-            }));
-
             const res = await AiApi.ask(wsId, {
               dataset_id: selectedDataset.id,
               question: query,
-              conversation_history: history,
+              conversation_history: chatHistory,
             });
 
             assistantMsg = {
@@ -270,18 +270,68 @@ export const AskYourData: React.FC = () => {
               suggestedFollowUps: res.suggested_follow_ups,
             };
           } catch (serverErr) {
-            console.warn('Backend AI query fallback to local engine:', serverErr);
-            assistantMsg = await AskAnalyticsService.processQuestion(query, {
-              dataset: selectedDataset,
-              previousMessage: prevMsg,
-            });
+            console.warn('Backend AI ask query fallback to AI Chat:', serverErr);
+            try {
+              const chatRes = await AiApi.chat(wsId, {
+                message: query,
+                dataset_id: selectedDataset?.id,
+                dataset_name: selectedDataset?.name,
+                columns: selectedDataset?.columns,
+                row_count: selectedDataset?.rowCount,
+                conversation_history: chatHistory,
+              });
+              assistantMsg = {
+                id: `msg-a-${Date.now()}`,
+                sender: 'assistant',
+                timestamp: `Today, ${nowTime}`,
+                content: chatRes.content || chatRes.direct_answer,
+                directAnswer: chatRes.direct_answer,
+                intent: chatRes.intent,
+                metrics: [],
+                interpretation: chatRes.direct_answer,
+                evidence: [],
+                suggestedFollowUps: chatRes.suggested_follow_ups,
+              };
+            } catch (chatErr) {
+              console.warn('Backend AI chat fallback to local engine:', chatErr);
+              assistantMsg = await AskAnalyticsService.processQuestion(query, {
+                dataset: selectedDataset,
+                previousMessage: prevMsg,
+              });
+            }
           }
         }
       } else {
-        assistantMsg = await AskAnalyticsService.processQuestion(query, {
-          dataset: selectedDataset,
-          previousMessage: prevMsg,
-        });
+        // Sample or mock dataset: invoke Google Gemini conversational chatbot
+        try {
+          const chatRes = await AiApi.chat(wsId || undefined, {
+            message: query,
+            dataset_id: selectedDataset?.id,
+            dataset_name: selectedDataset?.name,
+            columns: selectedDataset?.columns,
+            row_count: selectedDataset?.rowCount,
+            conversation_history: chatHistory,
+          });
+
+          assistantMsg = {
+            id: `msg-a-${Date.now()}`,
+            sender: 'assistant',
+            timestamp: `Today, ${nowTime}`,
+            content: chatRes.content || chatRes.direct_answer,
+            directAnswer: chatRes.direct_answer,
+            intent: chatRes.intent,
+            metrics: [],
+            interpretation: chatRes.direct_answer,
+            evidence: [],
+            suggestedFollowUps: chatRes.suggested_follow_ups,
+          };
+        } catch (chatErr) {
+          console.warn('AI chat endpoint fallback to local engine:', chatErr);
+          assistantMsg = await AskAnalyticsService.processQuestion(query, {
+            dataset: selectedDataset,
+            previousMessage: prevMsg,
+          });
+        }
       }
 
       const finalSession: ConversationSession = {
@@ -418,15 +468,15 @@ export const AskYourData: React.FC = () => {
   const hasActiveMessages = !!(activeSession && activeSession.messages.length > 0);
 
   return (
-    <div className="space-y-4">
-      {/* 1. Global Page Header matching design reference */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div className="h-full flex flex-col min-h-0 space-y-3">
+      {/* 1. Global Page Header matching design reference (Fixed) */}
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-[#EDF7FA] border border-[#BBDCE8] flex items-center justify-center text-[#007D78] shadow-2xs shrink-0">
             <Sparkles className="w-5 h-5 text-[#009F98]" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-serif text-[#102C46] tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-serif text-[#102C46] tracking-tight font-extrabold">
               Ask Your Data
             </h1>
             <p className="text-xs text-[#52616C] font-medium">
@@ -436,7 +486,7 @@ export const AskYourData: React.FC = () => {
         </div>
 
         {/* AI & Verification Engine Status Pill */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#DCE5EB] bg-white shadow-2xs text-xs self-start sm:self-auto">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#DCE5EB] bg-white shadow-2xs text-xs self-start sm:self-auto shrink-0">
           <div
             className={`w-2 h-2 rounded-full ${
               aiStatus?.operational
@@ -460,10 +510,10 @@ export const AskYourData: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Three-Panel Layout matching reference design authority */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch min-h-[660px]">
+      {/* 2. Three-Panel Layout: Fixed sidebars, Independently Scrolling conversation */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden">
         {/* Panel 1: Conversation History (Left, 3 cols) */}
-        <div className="lg:col-span-3 h-full">
+        <div className="lg:col-span-3 h-full overflow-hidden flex flex-col min-h-0">
           <ConversationSidebar
             conversations={conversations}
             activeSessionId={activeSessionId}
@@ -475,39 +525,43 @@ export const AskYourData: React.FC = () => {
         </div>
 
         {/* Panel 2: Main Chat Workspace (Center, 6 cols) */}
-        <div className="lg:col-span-6 bg-[#F5F8FA] rounded-2xl border border-[#DCE5EB] p-4 flex flex-col justify-between h-full min-h-[660px] shadow-subtle relative overflow-hidden">
-          {/* Dynamic Switch: STATE A (Welcome) vs STATE B (Active Conversation) */}
-          {!hasActiveMessages ? (
-            <WelcomeState
-              user={user}
-              selectedDataset={selectedDataset}
-              suggestedQuestions={suggestedQuestions}
-              onSelectQuestion={(q) => handleSendQuestion(q)}
-            />
-          ) : (
-            <ActiveChatState
-              messages={activeSession!.messages}
-              isProcessing={isProcessing}
-              onSelectQuestion={(q) => handleSendQuestion(q)}
-              onAddToReport={handleAddToReport}
-              onClarify={handleClarify}
-              onSaveAnalysis={handleSaveAnalysis}
-            />
-          )}
+        <div className="lg:col-span-6 bg-[#F5F8FA] rounded-2xl border border-[#DCE5EB] p-4 flex flex-col h-full min-h-0 shadow-subtle relative overflow-hidden">
+          {/* Scrollable conversation history region */}
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 pb-2">
+            {!hasActiveMessages ? (
+              <WelcomeState
+                user={user}
+                selectedDataset={selectedDataset}
+                suggestedQuestions={suggestedQuestions}
+                onSelectQuestion={(q) => handleSendQuestion(q)}
+              />
+            ) : (
+              <ActiveChatState
+                messages={activeSession!.messages}
+                isProcessing={isProcessing}
+                onSelectQuestion={(q) => handleSendQuestion(q)}
+                onAddToReport={handleAddToReport}
+                onClarify={handleClarify}
+                onSaveAnalysis={handleSaveAnalysis}
+              />
+            )}
+          </div>
 
-          {/* Persistent Question Composer at bottom */}
-          <ChatComposer
-            value={questionInput}
-            onChange={setQuestionInput}
-            onSend={handleSendQuestion}
-            isProcessing={isProcessing}
-            selectedDataset={selectedDataset}
-            hasActiveMessages={hasActiveMessages}
-          />
+          {/* Fixed Question Composer at bottom (Permanently visible) */}
+          <div className="shrink-0 pt-2 border-t border-[#DCE5EB]/60 bg-[#F5F8FA]">
+            <ChatComposer
+              value={questionInput}
+              onChange={setQuestionInput}
+              onSend={handleSendQuestion}
+              isProcessing={isProcessing}
+              selectedDataset={selectedDataset}
+              hasActiveMessages={hasActiveMessages}
+            />
+          </div>
         </div>
 
         {/* Panel 3: Dataset Intelligence (Right, 3 cols) */}
-        <div className="lg:col-span-3 h-full">
+        <div className="lg:col-span-3 h-full overflow-hidden flex flex-col min-h-0">
           <DatasetIntelligencePanel
             datasets={datasets}
             selectedDataset={selectedDataset}

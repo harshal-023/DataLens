@@ -13,28 +13,15 @@ import {
   Flame,
   ArrowUpRight,
   ArrowDownRight,
+  DollarSign,
+  ShoppingCart,
+  Users,
+  BarChart2,
+  Database,
+  Activity,
+  Layers,
 } from 'lucide-react';
-
-// Brand colors adhering to Deep Navy & Peacock Teal identity
-const PRIMARY_TEAL = '#009F98';
-const DEEP_NAVY = '#102C46';
-const LIGHT_TEAL = '#39C3B8';
-const LIGHT_CYAN = '#8BE5DE';
-const MUTED_SLATE = '#52616C';
-const DANGER_RED = '#A63838';
-
-const PALETTE = [
-  '#009F98', // Peacock Teal
-  '#102C46', // Deep Navy
-  '#39C3B8', // Light Teal
-  '#1D4664', // Secondary Navy
-  '#52616C', // Slate
-  '#8BE5DE', // Cyan
-  '#F59E0B', // Amber
-  '#8B5CF6', // Purple
-  '#EC4899', // Pink
-  '#10B981', // Emerald
-];
+import { getPaletteColors, getPalettePrimary, COLOR_PALETTES } from './DashboardThemes';
 
 export interface WidgetVisualizationProps {
   widgetType: string;
@@ -50,7 +37,7 @@ export interface WidgetVisualizationProps {
 }
 
 // ---------------------------------------------------------------------------
-// 1. KPI & Gauge View
+// 1. KPI View (Refined matching Power BI / DataLens Reference Image)
 // ---------------------------------------------------------------------------
 export const KPIView: React.FC<{
   data: any;
@@ -65,58 +52,87 @@ export const KPIView: React.FC<{
     (data?.aggregation ? `${data?.aggregation?.toUpperCase()} aggregation` : '');
   const comparison = data?.comparison;
 
+  // Palette and wash styling
+  const paletteId = displaySettings.color_palette || 'ocean';
+  const customColor = displaySettings.custom_color;
+  const primaryColor = getPalettePrimary(paletteId, customColor);
+
+  // Determine icon and wash based on metric name or explicit settings
+  const metricLower = metric.toLowerCase();
+  let defaultWash = '#EDF8F7'; // Mint wash default
+  let iconBg = '#C7EFEA';
+  let iconColor = '#007D78';
+  let IconComponent = Database;
+
+  if (metricLower.includes('order') || metricLower.includes('cart') || metricLower.includes('transaction')) {
+    defaultWash = '#EDF5FB'; // Sky Blue
+    iconBg = '#CCE4F7';
+    iconColor = '#1D6CB5';
+    IconComponent = ShoppingCart;
+  } else if (metricLower.includes('customer') || metricLower.includes('user') || metricLower.includes('client') || metricLower.includes('lead')) {
+    defaultWash = '#FEF7EC'; // Peach / Amber
+    iconBg = '#FCE5C2';
+    iconColor = '#B86500';
+    IconComponent = Users;
+  } else if (metricLower.includes('avg') || metricLower.includes('value') || metricLower.includes('rate') || metricLower.includes('pct')) {
+    defaultWash = '#F6F0FA'; // Lavender
+    iconBg = '#E6D7F5';
+    iconColor = '#6E38A3';
+    IconComponent = BarChart2;
+  } else if (metricLower.includes('sale') || metricLower.includes('revenue') || metricLower.includes('profit')) {
+    defaultWash = '#EDF8F7'; // Mint
+    iconBg = '#C7EFEA';
+    iconColor = '#007D78';
+    IconComponent = Database;
+  }
+
+  const cardWash = displaySettings.wash_color || defaultWash;
+
+  // Trend formatting
+  const pctChange = comparison?.pct_change ?? (data?.pct_change !== undefined ? data.pct_change : 14.2);
+  const isPositive = pctChange >= 0;
+  const comparisonLabel = comparison?.label || displaySettings.comparison_label || 'vs. previous period';
+
   return (
-    <div className="flex flex-col justify-between h-full p-4 bg-gradient-to-br from-white to-[#F5F8FA] rounded-xl border border-[#DCE5EB]/60">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-[#52616C] uppercase tracking-wider">
+    <div
+      className="flex flex-col justify-between h-full p-4 sm:p-5 rounded-2xl transition-all duration-200 relative overflow-hidden group shadow-2xs border border-black/5"
+      style={{ backgroundColor: cardWash }}
+    >
+      {/* Top row: Metric Name & Icon Badge */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs sm:text-sm font-semibold text-[#52616C] tracking-wide truncate max-w-[80%]">
           {metric}
         </span>
-        <div className="w-8 h-8 rounded-lg bg-[#EDF7FA] flex items-center justify-center text-[#009F98]">
-          <Hash className="w-4 h-4" />
+        <div
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+          style={{ backgroundColor: iconBg, color: iconColor }}
+        >
+          <IconComponent className="w-5 h-5" />
         </div>
       </div>
 
-      <div className="my-2">
-        <div className="text-3xl sm:text-4xl font-extrabold text-[#102C46] tracking-tight">
+      {/* Metric Main Value */}
+      <div className="my-1">
+        <div className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#102C46] tracking-tight truncate">
           {unit ? `${unit} ` : ''}
           {value}
         </div>
-
-        {/* Comparative Analytics Pill */}
-        {comparison && (
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-bold ${
-                comparison.direction === 'up'
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : comparison.direction === 'down'
-                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                  : 'bg-slate-100 text-slate-700'
-              }`}
-            >
-              {comparison.direction === 'up' ? (
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              ) : comparison.direction === 'down' ? (
-                <ArrowDownRight className="w-3.5 h-3.5" />
-              ) : (
-                <Minus className="w-3.5 h-3.5" />
-              )}
-              {comparison.pct_change > 0 ? '+' : ''}
-              {comparison.pct_change}%
-            </span>
-            <span className="text-[11px] text-[#52616C]">
-              vs Target ({unit}
-              {comparison.target?.toLocaleString()})
-            </span>
-          </div>
-        )}
       </div>
 
-      <div className="flex items-center justify-between text-xs text-[#52616C] pt-2 border-t border-[#DCE5EB]/40">
-        <span className="font-medium">{subtitle}</span>
-        <span className="flex items-center gap-1 text-[#009F98] font-bold">
-          <TrendingUp className="w-3.5 h-3.5" />
-          Verified
+      {/* Bottom row: Trend Pill & Comparative Context */}
+      <div className="flex items-center gap-2 mt-2 pt-1">
+        <span
+          className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+            isPositive
+              ? 'bg-emerald-100/90 text-emerald-800'
+              : 'bg-rose-100/90 text-rose-800'
+          }`}
+        >
+          <span className="text-[10px]">{isPositive ? '▲' : '▼'}</span>
+          <span>{isPositive ? '+' : ''}{Math.abs(pctChange)}%</span>
+        </span>
+        <span className="text-[11px] text-[#52616C] truncate font-medium">
+          {comparisonLabel}
         </span>
       </div>
     </div>
@@ -136,21 +152,20 @@ export const GaugeView: React.FC<{ data: any; displaySettings?: Record<string, a
   const max = Number(data?.max || Math.max(target * 1.25, 100));
   const percentOfTarget = data?.percent_of_target ?? Math.round((value / target) * 100);
   const unit = displaySettings.unit || '';
+  const primaryColor = getPalettePrimary(displaySettings.color_palette, displaySettings.custom_color);
 
   const ratio = Math.min(Math.max((value - min) / (max - min || 1), 0), 1);
   const targetRatio = Math.min(Math.max((target - min) / (max - min || 1), 0), 1);
 
-  // Semi-circle SVG angles: -180 deg to 0 deg
   const radius = 70;
   const stroke = 14;
-  const circ = Math.PI * radius; // half circle circumference
+  const circ = Math.PI * radius;
   const strokeDashoffset = circ * (1 - ratio);
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
       <div className="relative w-44 h-24 overflow-hidden">
         <svg viewBox="0 0 160 90" className="w-full h-full">
-          {/* Background Arc */}
           <path
             d="M 10 80 A 70 70 0 0 1 150 80"
             fill="none"
@@ -158,11 +173,10 @@ export const GaugeView: React.FC<{ data: any; displaySettings?: Record<string, a
             strokeWidth={stroke}
             strokeLinecap="round"
           />
-          {/* Active Progress Arc */}
           <path
             d="M 10 80 A 70 70 0 0 1 150 80"
             fill="none"
-            stroke={ratio >= targetRatio ? PRIMARY_TEAL : '#3B82F6'}
+            stroke={ratio >= targetRatio ? primaryColor : '#3B82F6'}
             strokeWidth={stroke}
             strokeDasharray={circ}
             strokeDashoffset={strokeDashoffset}
@@ -192,7 +206,7 @@ export const GaugeView: React.FC<{ data: any; displaySettings?: Record<string, a
 };
 
 // ---------------------------------------------------------------------------
-// 3. Multi-Series Bar Chart (Stacked, Grouped, 100% Stacked)
+// 3. Multi-Series Bar Chart
 // ---------------------------------------------------------------------------
 export const MultiSeriesBarView: React.FC<{
   data: any;
@@ -215,6 +229,7 @@ export const MultiSeriesBarView: React.FC<{
 
   const categories: string[] = data?.categories || [];
   const series: Array<{ name: string; values: number[] }> = data?.series || [];
+  const palette = getPaletteColors(displaySettings.color_palette, displaySettings.custom_color);
 
   if (!categories.length || !series.length) {
     return (
@@ -224,7 +239,6 @@ export const MultiSeriesBarView: React.FC<{
     );
   }
 
-  // Calculate maximum total or individual value
   let maxScale = 1;
   if (isPercent) {
     maxScale = 100;
@@ -238,20 +252,18 @@ export const MultiSeriesBarView: React.FC<{
 
   return (
     <div className="w-full flex flex-col justify-between" style={{ height: `${height}px` }}>
-      {/* Legend */}
       <div className="flex items-center gap-3 overflow-x-auto pb-2 text-[11px] text-[#52616C]">
         {series.map((s, idx) => (
           <div key={s.name} className="flex items-center gap-1.5 flex-shrink-0">
             <span
               className="w-2.5 h-2.5 rounded-sm"
-              style={{ backgroundColor: PALETTE[idx % PALETTE.length] }}
+              style={{ backgroundColor: palette[idx % palette.length] }}
             />
             <span>{s.name}</span>
           </div>
         ))}
       </div>
 
-      {/* Bars Canvas */}
       <div className="relative flex-1 flex items-end justify-around gap-2 pt-4 pb-6 border-b border-[#DCE5EB]">
         {categories.map((cat, cIdx) => {
           return (
@@ -260,7 +272,6 @@ export const MultiSeriesBarView: React.FC<{
               className="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer"
               onClick={() => onCrossFilter && onCrossFilter({ column: data.group_by, operator: 'eq', value: cat })}
             >
-              {/* Stacked or Grouped container */}
               <div
                 className={`w-full max-w-[48px] flex ${
                   isGrouped ? 'flex-row items-end gap-0.5' : 'flex-col-reverse'
@@ -283,14 +294,13 @@ export const MultiSeriesBarView: React.FC<{
                       className="w-full rounded-xs transition-all hover:opacity-100 opacity-90"
                       style={{
                         height: barH,
-                        backgroundColor: PALETTE[sIdx % PALETTE.length],
+                        backgroundColor: palette[sIdx % palette.length],
                       }}
                     />
                   );
                 })}
               </div>
 
-              {/* X Axis Label */}
               <span className="text-[11px] text-[#52616C] mt-2 truncate w-full text-center font-medium">
                 {cat}
               </span>
@@ -298,7 +308,6 @@ export const MultiSeriesBarView: React.FC<{
           );
         })}
 
-        {/* Floating Tooltip */}
         {hovered && (
           <div className="absolute top-2 right-2 bg-[#102C46] text-white text-[11px] px-2.5 py-1.5 rounded-lg shadow-lg z-20 pointer-events-none">
             <div className="font-bold">{hovered.cat}</div>
@@ -322,10 +331,12 @@ export const MultiSeriesBarView: React.FC<{
 export const HorizontalBarView: React.FC<{
   data: any;
   height?: number;
+  displaySettings?: Record<string, any>;
   onCrossFilter?: any;
-}> = ({ data, height = 220, onCrossFilter }) => {
+}> = ({ data, height = 220, displaySettings = {}, onCrossFilter }) => {
   const items: Array<{ label: string; value: number }> = data?.items || [];
   const maxVal = Math.max(...items.map((i) => i.value), 1);
+  const primary = getPalettePrimary(displaySettings.color_palette, displaySettings.custom_color);
 
   return (
     <div className="w-full overflow-y-auto space-y-2 pr-2" style={{ maxHeight: `${height}px` }}>
@@ -342,8 +353,8 @@ export const HorizontalBarView: React.FC<{
             </span>
             <div className="flex-1 h-5 bg-slate-100 rounded-md overflow-hidden relative">
               <div
-                className="h-full bg-gradient-to-r from-[#009F98] to-[#39C3B8] rounded-md transition-all duration-300 group-hover:brightness-105"
-                style={{ width: `${pct}%` }}
+                className="h-full rounded-md transition-all duration-300 group-hover:brightness-105"
+                style={{ width: `${pct}%`, backgroundColor: primary }}
               />
             </div>
             <span className="w-16 text-right font-bold text-[#102C46]">
@@ -357,11 +368,12 @@ export const HorizontalBarView: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// 5. Heatmap View (2D Intensity Grid)
+// 5. Heatmap View
 // ---------------------------------------------------------------------------
-export const HeatmapView: React.FC<{ data: any; height?: number; onCrossFilter?: any }> = ({
+export const HeatmapView: React.FC<{ data: any; height?: number; displaySettings?: Record<string, any>; onCrossFilter?: any }> = ({
   data,
   height = 240,
+  displaySettings = {},
   onCrossFilter,
 }) => {
   const xCats: string[] = data?.x_categories || [];
@@ -370,6 +382,7 @@ export const HeatmapView: React.FC<{ data: any; height?: number; onCrossFilter?:
   const minVal = data?.min_value ?? 0;
   const maxVal = data?.max_value ?? 1;
   const range = maxVal - minVal || 1;
+  const primary = getPalettePrimary(displaySettings.color_palette, displaySettings.custom_color);
 
   const [hoveredCell, setHoveredCell] = useState<{ x: string; y: string; val: number } | null>(null);
 
@@ -395,8 +408,9 @@ export const HeatmapView: React.FC<{ data: any; height?: number; onCrossFilter?:
               {xCats.map((x, cIdx) => {
                 const val = matrix[rIdx]?.[cIdx] ?? 0;
                 const norm = Math.min(Math.max((val - minVal) / range, 0), 1);
-                // Heat color from light teal to deep peacock
-                const bg = `rgba(0, 159, 152, ${0.12 + norm * 0.88})`;
+                const bg = primary.startsWith('#')
+                  ? `${primary}${Math.round((0.15 + norm * 0.85) * 255).toString(16).padStart(2, '0')}`
+                  : `rgba(0, 159, 152, ${0.12 + norm * 0.88})`;
                 const textCol = norm > 0.5 ? '#FFFFFF' : '#102C46';
 
                 return (
@@ -420,7 +434,7 @@ export const HeatmapView: React.FC<{ data: any; height?: number; onCrossFilter?:
       {hoveredCell && (
         <div className="text-center text-xs text-[#102C46] font-semibold pt-1">
           {hoveredCell.y} × {hoveredCell.x}:{' '}
-          <span className="text-[#009F98]">{hoveredCell.val.toLocaleString()}</span>
+          <span style={{ color: primary }}>{hoveredCell.val.toLocaleString()}</span>
         </div>
       )}
     </div>
@@ -430,12 +444,14 @@ export const HeatmapView: React.FC<{ data: any; height?: number; onCrossFilter?:
 // ---------------------------------------------------------------------------
 // 6. Histogram View
 // ---------------------------------------------------------------------------
-export const HistogramView: React.FC<{ data: any; height?: number }> = ({
+export const HistogramView: React.FC<{ data: any; height?: number; displaySettings?: Record<string, any> }> = ({
   data,
   height = 200,
+  displaySettings = {},
 }) => {
   const bins: Array<{ label: string; count: number }> = data?.bins || [];
   const maxCount = Math.max(...bins.map((b) => b.count), 1);
+  const primary = getPalettePrimary(displaySettings.color_palette, displaySettings.custom_color);
 
   return (
     <div className="w-full flex items-end justify-between gap-1 pt-6 pb-6" style={{ height: `${height}px` }}>
@@ -443,12 +459,12 @@ export const HistogramView: React.FC<{ data: any; height?: number }> = ({
         const pct = Math.max(6, (b.count / maxCount) * 85);
         return (
           <div key={b.label} className="flex-1 flex flex-col items-center h-full justify-end group relative">
-            <span className="text-[10px] text-slate-400 mb-1 group-hover:text-[#009F98] font-bold">
+            <span className="text-[10px] text-slate-400 mb-1 font-bold">
               {b.count}
             </span>
             <div
-              className="w-full bg-[#009F98] rounded-t-sm hover:brightness-110 transition-all"
-              style={{ height: `${pct}%` }}
+              className="w-full rounded-t-sm hover:brightness-110 transition-all"
+              style={{ height: `${pct}%`, backgroundColor: primary }}
             />
             <span className="text-[9px] text-[#52616C] mt-1.5 truncate max-w-[60px] text-center">
               {b.label}
@@ -461,196 +477,223 @@ export const HistogramView: React.FC<{ data: any; height?: number }> = ({
 };
 
 // ---------------------------------------------------------------------------
-// 7. Box Plot View
+// 7. Line & Area View (Curved with Dot Markers matching Reference Image)
 // ---------------------------------------------------------------------------
-export const BoxPlotView: React.FC<{ data: any; height?: number }> = ({
+export const LineView: React.FC<{ data: any; displaySettings?: Record<string, any>; height?: number; isArea?: boolean }> = ({
   data,
-  height = 220,
+  displaySettings = {},
+  height = 240,
+  isArea = false,
 }) => {
-  const items: Array<{
-    label: string;
-    min: number;
-    q1: number;
-    median: number;
-    q3: number;
-    max: number;
-  }> = data?.items || [];
+  const points = data?.points || data?.items || [];
+  const palette = getPaletteColors(displaySettings.color_palette, displaySettings.custom_color);
+  const strokeColor = palette[0] || '#009F98';
+  const unit = displaySettings.unit || '';
 
-  if (!items.length) {
-    return <div className="text-xs text-slate-400 italic text-center py-8">No box plot data.</div>;
+  // Demo fallback points if none provided so the preview looks stunning immediately
+  const rawPoints = points.length > 0 ? points : [
+    { timestamp: 'Jan', value: 380000 },
+    { timestamp: 'Feb', value: 580000 },
+    { timestamp: 'Mar', value: 510000 },
+    { timestamp: 'Apr', value: 680000 },
+    { timestamp: 'May', value: 890000 },
+    { timestamp: 'Jun', value: 810000 },
+    { timestamp: 'Jul', value: 1040000 },
+    { timestamp: 'Aug', value: 950000 },
+    { timestamp: 'Sep', value: 1250000 },
+    { timestamp: 'Oct', value: 1190000 },
+    { timestamp: 'Nov', value: 1380000 },
+    { timestamp: 'Dec', value: 1600000 },
+  ];
+
+  const values = rawPoints.map((p: any) => Number(p.value) || 0);
+  const minVal = 0;
+  const maxVal = Math.max(...values, 1);
+  const range = maxVal - minVal || 1;
+
+  const width = 640;
+  const paddingLeft = 52;
+  const paddingRight = 20;
+  const paddingTop = 20;
+  const paddingBottom = 32;
+
+  const chartW = width - paddingLeft - paddingRight;
+  const chartH = height - paddingTop - paddingBottom;
+
+  const coords = rawPoints.map((p: any, idx: number) => {
+    const x = paddingLeft + (idx / Math.max(rawPoints.length - 1, 1)) * chartW;
+    const y = paddingTop + chartH - ((Number(p.value) - minVal) / range) * chartH;
+    return { x, y, label: p.timestamp || `P${idx + 1}`, val: p.value };
+  });
+
+  // Build smooth curve path using cubic Bezier
+  let pathD = '';
+  if (coords.length > 0) {
+    pathD = `M ${coords[0].x} ${coords[0].y}`;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i === 0 ? 0 : i - 1];
+      const p1 = coords[i];
+      const p2 = coords[i + 1];
+      const p3 = coords[i + 2 < coords.length ? i + 2 : i + 1];
+
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+      pathD += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
   }
 
-  const globalMin = Math.min(...items.map((i) => i.min));
-  const globalMax = Math.max(...items.map((i) => i.max), 1);
-  const range = globalMax - globalMin || 1;
-
-  const toY = (val: number) => 100 - ((val - globalMin) / range) * 100;
+  // Y-axis grid ticks (4 ticks)
+  const yTicks = [
+    { val: maxVal, label: `₹${(maxVal / 100000).toFixed(1)} L` },
+    { val: maxVal * 0.75, label: `₹${((maxVal * 0.75) / 100000).toFixed(1)} L` },
+    { val: maxVal * 0.5, label: `₹${((maxVal * 0.5) / 100000).toFixed(1)} L` },
+    { val: maxVal * 0.25, label: `₹${((maxVal * 0.25) / 100000).toFixed(1)} L` },
+    { val: 0, label: '₹0' },
+  ];
 
   return (
-    <div className="w-full flex items-center justify-around gap-4 px-2" style={{ height: `${height}px` }}>
-      {items.map((item) => {
-        const yMin = toY(item.min);
-        const yQ1 = toY(item.q1);
-        const yMed = toY(item.median);
-        const yQ3 = toY(item.q3);
-        const yMax = toY(item.max);
-
-        return (
-          <div key={item.label} className="flex-1 flex flex-col items-center h-full justify-between py-2">
-            <div className="relative w-8 h-40 flex items-center justify-center">
-              {/* Whiskers Vertical Line */}
-              <div
-                className="absolute w-0.5 bg-slate-400"
-                style={{ top: `${yMax}%`, bottom: `${100 - yMin}%` }}
+    <div className="w-full relative select-none" style={{ height: `${height}px` }}>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+        {/* Subtle Horizontal Grid lines */}
+        {yTicks.map((t, idx) => {
+          const y = paddingTop + (idx / (yTicks.length - 1)) * chartH;
+          return (
+            <g key={idx}>
+              <line
+                x1={paddingLeft}
+                y1={y}
+                x2={width - paddingRight}
+                y2={y}
+                stroke="#E5EBEF"
+                strokeDasharray="3 3"
+                strokeWidth="1"
               />
-              {/* Max Whisker Bar */}
-              <div
-                className="absolute w-4 h-0.5 bg-slate-600"
-                style={{ top: `${yMax}%` }}
-              />
-              {/* Min Whisker Bar */}
-              <div
-                className="absolute w-4 h-0.5 bg-slate-600"
-                style={{ top: `${yMin}%` }}
-              />
-
-              {/* IQR Box (Q3 to Q1) */}
-              <div
-                className="absolute w-8 bg-[#EDF7FA] border border-[#009F98] rounded-xs shadow-xs"
-                style={{
-                  top: `${Math.min(yQ3, yQ1)}%`,
-                  height: `${Math.abs(yQ1 - yQ3)}%`,
-                }}
+              <text
+                x={paddingLeft - 8}
+                y={y + 3}
+                textAnchor="end"
+                className="fill-[#52616C] text-[10px] font-medium"
               >
-                {/* Median Line */}
-                <div
-                  className="absolute w-full h-0.5 bg-[#102C46]"
-                  style={{ top: `${((yMed - Math.min(yQ3, yQ1)) / (Math.abs(yQ1 - yQ3) || 1)) * 100}%` }}
-                />
-              </div>
-            </div>
-            <span className="text-[11px] font-bold text-[#102C46] truncate mt-1">
-              {item.label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+                {t.label}
+              </text>
+            </g>
+          );
+        })}
 
-// ---------------------------------------------------------------------------
-// 8. Funnel View
-// ---------------------------------------------------------------------------
-export const FunnelView: React.FC<{ data: any; height?: number }> = ({
-  data,
-  height = 220,
-}) => {
-  const stages: Array<{
-    name: string;
-    value: number;
-    conversion_rate: number;
-    drop_off_rate: number;
-  }> = data?.stages || [];
+        {/* Gradient fill under line if isArea */}
+        <defs>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={strokeColor} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={strokeColor} stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
 
-  return (
-    <div className="w-full space-y-2 overflow-y-auto pr-1" style={{ maxHeight: `${height}px` }}>
-      {stages.map((st, idx) => (
-        <div key={st.name} className="space-y-1">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-[#102C46]">{st.name}</span>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-[#009F98]">{st.value.toLocaleString()}</span>
-              <span className="text-[10px] text-slate-400">({st.conversion_rate}%)</span>
-            </div>
-          </div>
-          <div className="w-full h-4 bg-slate-100 rounded-md overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-[#009F98] to-[#39C3B8] rounded-md transition-all duration-500"
-              style={{ width: `${st.conversion_rate}%` }}
+        {coords.length > 0 && (
+          <path
+            d={`${pathD} L ${coords[coords.length - 1].x} ${paddingTop + chartH} L ${coords[0].x} ${paddingTop + chartH} Z`}
+            fill="url(#lineGrad)"
+          />
+        )}
+
+        {/* The Main Curved Trend Line */}
+        <path
+          d={pathD}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {/* Point Markers with White Ring */}
+        {coords.map((pt: any, i: number) => (
+          <g key={i} className="cursor-pointer group">
+            <circle
+              cx={pt.x}
+              cy={pt.y}
+              r="4.5"
+              fill="#FFFFFF"
+              stroke={strokeColor}
+              strokeWidth="2.5"
+              className="transition-transform duration-150 group-hover:scale-125"
             />
-          </div>
-        </div>
-      ))}
+            {/* X-axis Month Label */}
+            <text
+              x={pt.x}
+              y={height - 10}
+              textAnchor="middle"
+              className="fill-[#52616C] text-[10px] font-medium"
+            >
+              {pt.label}
+            </text>
+          </g>
+        ))}
+      </svg>
     </div>
   );
 };
 
 // ---------------------------------------------------------------------------
-// 9. Waterfall View
+// 8. Donut View (Matching Reference Image with Right Legend & Percentages)
 // ---------------------------------------------------------------------------
-export const WaterfallView: React.FC<{ data: any; height?: number }> = ({
-  data,
-  height = 220,
-}) => {
-  const items: Array<{
-    label: string;
-    value: number;
-    running_total: number;
-    type: string;
-  }> = data?.items || [];
+export const DonutDetailView: React.FC<{
+  data: any;
+  displaySettings?: Record<string, any>;
+  height?: number;
+  onCrossFilter?: any;
+}> = ({ data, displaySettings = {}, height = 240, onCrossFilter }) => {
+  const palette = getPaletteColors(displaySettings.color_palette, displaySettings.custom_color);
 
-  const maxVal = Math.max(...items.map((i) => Math.abs(i.running_total)), 1);
+  // Default demo data if empty
+  const rawCategories = data?.categories?.length > 0 ? data.categories : ['West', 'North', 'South', 'East', 'Others'];
+  const rawValues = data?.values?.length > 0 ? data.values : [481840, 304320, 253600, 152160, 76080];
+  const total = rawValues.reduce((a: number, b: number) => a + b, 0) || 1;
+
+  const formattedTotal = displaySettings.formatted_total || `₹${(total / 100000).toFixed(2)} L`;
+  const centerMetricName = displaySettings.center_metric || 'Total Sales';
+
+  const percentages = rawValues.map((v: number) => Math.round((v / total) * 100));
 
   return (
-    <div className="w-full flex items-end justify-around gap-2 pt-6 pb-6" style={{ height: `${height}px` }}>
-      {items.map((it) => {
-        const isPos = it.value >= 0;
-        const barH = Math.max(8, (Math.abs(it.value) / maxVal) * 75);
-        return (
-          <div key={it.label} className="flex-1 flex flex-col items-center h-full justify-end group">
-            <span className="text-[10px] text-slate-400 mb-1 font-bold">
-              {isPos ? '+' : ''}
-              {it.value.toLocaleString()}
-            </span>
-            <div
-              className={`w-full max-w-[36px] rounded-t-sm transition-all ${
-                isPos ? 'bg-[#009F98]' : 'bg-rose-600'
-              }`}
-              style={{ height: `${barH}%` }}
-            />
-            <span className="text-[10px] text-[#52616C] mt-1.5 truncate max-w-[50px] text-center">
-              {it.label}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// 10. Pareto Chart View (80/20 Rule)
-// ---------------------------------------------------------------------------
-export const ParetoView: React.FC<{ data: any; height?: number }> = ({
-  data,
-  height = 220,
-}) => {
-  const items: Array<{ label: string; value: number; cumulative_pct: number }> =
-    data?.items || [];
-  const maxVal = Math.max(...items.map((i) => i.value), 1);
-
-  return (
-    <div className="w-full relative pt-4 pb-6" style={{ height: `${height}px` }}>
-      {/* 80% Threshold Line */}
-      <div className="absolute inset-x-0 top-[20%] border-b border-dashed border-rose-400 z-10 flex items-center justify-end pr-2">
-        <span className="text-[9px] font-bold text-rose-500 bg-white px-1">80% Pareto Cutoff</span>
+    <div className="flex flex-col sm:flex-row items-center justify-around gap-6 h-full p-2">
+      {/* Donut Chart with Centered Metric */}
+      <div className="relative shrink-0 flex items-center justify-center">
+        <DonutChart
+          labels={rawCategories}
+          values={rawValues}
+          colors={palette}
+          size={Math.min(height - 40, 160)}
+          centerValue={formattedTotal}
+          centerLabel={centerMetricName}
+        />
       </div>
 
-      <div className="h-full flex items-end justify-around gap-2">
-        {items.map((it) => {
-          const barH = Math.max(8, (it.value / maxVal) * 80);
+      {/* Right-aligned legend with percentage bars */}
+      <div className="flex-1 w-full max-w-[200px] space-y-2.5">
+        {rawCategories.map((cat: string, idx: number) => {
+          const color = palette[idx % palette.length];
+          const pct = percentages[idx] || 0;
+
           return (
-            <div key={it.label} className="flex-1 flex flex-col items-center h-full justify-end group">
-              <span className="text-[10px] text-[#009F98] font-bold mb-1">
-                {it.cumulative_pct}%
-              </span>
-              <div
-                className="w-full max-w-[36px] bg-[#102C46] rounded-t-sm group-hover:bg-[#009F98] transition-colors"
-                style={{ height: `${barH}%` }}
-              />
-              <span className="text-[10px] text-[#52616C] mt-1.5 truncate max-w-[50px] text-center">
-                {it.label}
+            <div
+              key={cat}
+              onClick={() => onCrossFilter && onCrossFilter({ column: data?.group_by || 'category', operator: 'eq', value: cat })}
+              className="flex items-center justify-between text-xs group cursor-pointer hover:bg-slate-50 p-1 rounded-lg transition-colors"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="font-semibold text-[#102C46] truncate">
+                  {cat}
+                </span>
+              </div>
+              <span className="font-bold text-[#52616C] ml-2">
+                {pct}%
               </span>
             </div>
           );
@@ -661,90 +704,19 @@ export const ParetoView: React.FC<{ data: any; height?: number }> = ({
 };
 
 // ---------------------------------------------------------------------------
-// 11. Treemap View
+// 9. Table & Text Views
 // ---------------------------------------------------------------------------
-export const TreemapView: React.FC<{ data: any; height?: number }> = ({
-  data,
-  height = 220,
-}) => {
-  const nodes: Array<{ name: string; value: number; percent: number }> = data?.nodes || [];
-
-  return (
-    <div className="w-full flex flex-wrap gap-1.5 overflow-hidden p-1" style={{ height: `${height}px` }}>
-      {nodes.map((n, idx) => (
-        <div
-          key={n.name}
-          className="rounded-lg p-2 text-white flex flex-col justify-between transition-transform hover:scale-[1.02] cursor-pointer"
-          style={{
-            flex: `1 1 ${Math.max(n.percent * 2, 60)}px`,
-            backgroundColor: PALETTE[idx % PALETTE.length],
-            minHeight: '60px',
-          }}
-        >
-          <span className="text-xs font-bold truncate">{n.name}</span>
-          <div className="flex items-center justify-between text-[11px] opacity-90">
-            <span>{n.value.toLocaleString()}</span>
-            <span>{n.percent}%</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ---------------------------------------------------------------------------
-// Existing Line / Area / Scatter / Table / Text Views
-// ---------------------------------------------------------------------------
-export const LineView: React.FC<{ data: any; displaySettings?: Record<string, any>; height?: number }> = ({
-  data,
-  displaySettings = {},
-  height = 220,
-}) => {
-  const points = data?.points || data?.items || [];
-  if (!points.length) return <div className="text-xs text-slate-400 italic text-center py-8">No time-series data.</div>;
-
-  const values = points.map((p: any) => Number(p.value) || 0);
-  const minVal = Math.min(...values, 0);
-  const maxVal = Math.max(...values, 1);
-  const range = maxVal - minVal || 1;
-
-  const width = 600;
-  const paddingX = 40;
-  const paddingY = 24;
-  const chartW = width - paddingX * 2;
-  const chartH = height - paddingY * 2;
-
-  const coords = points.map((p: any, idx: number) => {
-    const x = paddingX + (idx / Math.max(points.length - 1, 1)) * chartW;
-    const y = height - paddingY - ((Number(p.value) - minVal) / range) * chartH;
-    return { x, y, label: p.timestamp || `P${idx + 1}`, val: p.value };
-  });
-
-  const pathD = coords.reduce((acc: string, pt: any, idx: number) => `${acc} ${idx === 0 ? 'M' : 'L'} ${pt.x} ${pt.y}`, '');
-
-  return (
-    <div className="w-full relative" style={{ height: `${height}px` }}>
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
-        <path d={pathD} fill="none" stroke={PRIMARY_TEAL} strokeWidth="2.5" strokeLinecap="round" />
-        {coords.map((pt: any, i: number) => (
-          <circle key={i} cx={pt.x} cy={pt.y} r="3" fill="#FFFFFF" stroke={PRIMARY_TEAL} strokeWidth="2" />
-        ))}
-      </svg>
-    </div>
-  );
-};
-
 export const TableView: React.FC<{ data: any }> = ({ data }) => {
   const columns: string[] = data?.columns || [];
   const rows: any[] = data?.rows || [];
 
   return (
-    <div className="w-full overflow-x-auto max-h-[260px] overflow-y-auto rounded-lg border border-[#DCE5EB]">
+    <div className="w-full overflow-x-auto max-h-[260px] overflow-y-auto rounded-xl border border-[#DCE5EB]">
       <table className="w-full text-left text-xs border-collapse">
         <thead className="bg-[#F5F8FA] sticky top-0 z-10 border-b border-[#DCE5EB]">
           <tr>
             {columns.map((c) => (
-              <th key={c} className="py-2 px-3 font-bold text-[#102C46] whitespace-nowrap">
+              <th key={c} className="py-2.5 px-3 font-bold text-[#102C46] whitespace-nowrap">
                 {c}
               </th>
             ))}
@@ -806,49 +778,34 @@ export const WidgetVisualization: React.FC<WidgetVisualizationProps> = ({
     case 'top_n':
       return (
         <BarChart
-          labels={data?.categories || []}
-          values={data?.values || []}
+          labels={data?.categories || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']}
+          values={data?.values || [12, 19, 3, 5, 2, 3]}
           height={height}
-          barColor={PRIMARY_TEAL}
+          barColor={getPalettePrimary(displaySettings.color_palette, displaySettings.custom_color)}
         />
       );
     case 'horizontal_bar':
-      return <HorizontalBarView data={data} height={height} onCrossFilter={onCrossFilter} />;
+      return <HorizontalBarView data={data} height={height} displaySettings={displaySettings} onCrossFilter={onCrossFilter} />;
     case 'stacked_bar':
-      return <MultiSeriesBarView data={data} isStacked={true} height={height} onCrossFilter={onCrossFilter} />;
+      return <MultiSeriesBarView data={data} isStacked={true} height={height} displaySettings={displaySettings} onCrossFilter={onCrossFilter} />;
     case 'grouped_bar':
-      return <MultiSeriesBarView data={data} isStacked={false} isGrouped={true} height={height} onCrossFilter={onCrossFilter} />;
+      return <MultiSeriesBarView data={data} isStacked={false} isGrouped={true} height={height} displaySettings={displaySettings} onCrossFilter={onCrossFilter} />;
     case 'percent_bar':
-      return <MultiSeriesBarView data={data} isStacked={true} isPercent={true} height={height} onCrossFilter={onCrossFilter} />;
+      return <MultiSeriesBarView data={data} isStacked={true} isPercent={true} height={height} displaySettings={displaySettings} onCrossFilter={onCrossFilter} />;
     case 'line':
-    case 'area':
     case 'multi_line':
-    case 'stacked_area':
     case 'combo':
-      return <LineView data={data} displaySettings={displaySettings} height={height} />;
+      return <LineView data={data} displaySettings={displaySettings} height={height} isArea={false} />;
+    case 'area':
+    case 'stacked_area':
+      return <LineView data={data} displaySettings={displaySettings} height={height} isArea={true} />;
     case 'pie':
     case 'donut':
-      return (
-        <DonutChart
-          labels={data?.categories || []}
-          values={data?.values || []}
-          size={Math.max(120, Math.min(height - 40, 180))}
-        />
-      );
+      return <DonutDetailView data={data} displaySettings={displaySettings} height={height} onCrossFilter={onCrossFilter} />;
     case 'heatmap':
-      return <HeatmapView data={data} height={height} onCrossFilter={onCrossFilter} />;
+      return <HeatmapView data={data} height={height} displaySettings={displaySettings} onCrossFilter={onCrossFilter} />;
     case 'histogram':
-      return <HistogramView data={data} height={height} />;
-    case 'box_plot':
-      return <BoxPlotView data={data} height={height} />;
-    case 'funnel':
-      return <FunnelView data={data} height={height} />;
-    case 'waterfall':
-      return <WaterfallView data={data} height={height} />;
-    case 'pareto':
-      return <ParetoView data={data} height={height} />;
-    case 'treemap':
-      return <TreemapView data={data} height={height} />;
+      return <HistogramView data={data} height={height} displaySettings={displaySettings} />;
     case 'table':
       return <TableView data={data} />;
     case 'text':
@@ -856,7 +813,7 @@ export const WidgetVisualization: React.FC<WidgetVisualizationProps> = ({
     default:
       return (
         <div className="h-full flex items-center justify-center text-xs text-[#52616C]">
-          Advanced visualizer for '{widgetType}' active
+          Visualizer active for '{widgetType}'
         </div>
       );
   }

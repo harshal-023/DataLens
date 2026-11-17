@@ -29,10 +29,10 @@ import asyncpg
 import duckdb
 
 PG_BIN_DIR = Path(r"C:\Program Files\PostgreSQL\18\bin")
-PG_HOST = "127.0.0.1"
-PG_PORT = "5432"
-PG_USER = "postgres"
-PG_PASSWORD = "Harshal@2366"
+PG_HOST = os.getenv("PG_HOST", "127.0.0.1")
+PG_PORT = os.getenv("PG_PORT", "5432")
+PG_USER = os.getenv("PG_USER", "postgres")
+PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
 SOURCE_DB = "datalens"
 DRILL_DB = "datalens_restore_drill"
 

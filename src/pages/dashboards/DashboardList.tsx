@@ -115,9 +115,17 @@ export const DashboardList: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => navigate('/dashboards/auto-generate')}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#007D78] to-[#009F98] text-white text-xs font-bold shadow-sm hover:shadow-md hover:from-[#006A66] hover:to-[#008781] transition-all cursor-pointer"
+            title="Generate a dashboard automatically from your data."
+          >
+            <Sparkles className="w-4 h-4 text-white" />
+            <span>AI Auto Dashboard</span>
+          </button>
           <Button
-            variant="primary"
+            variant="secondary"
             size="md"
             onClick={() => setIsCreateModalOpen(true)}
             leftIcon={<Plus className="w-4 h-4" />}

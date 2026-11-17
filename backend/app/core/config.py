@@ -61,9 +61,9 @@ class Settings(BaseSettings):
     AI_PROVIDER: str = "gemini"
     AI_ROUTING_MODE: str = "HYBRID"  # GEMINI_ONLY, LOCAL_ONLY, HYBRID, DETERMINISTIC_ONLY
     GEMINI_API_KEY: str | None = None
-    GEMINI_MODEL: str = "gemini-3.5-flash"
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
     AI_API_KEY: str | None = None  # Backward-compatible fallback
-    AI_MODEL: str = "gemini-3.5-flash"
+    AI_MODEL: str = "gemini-3.1-flash-lite"
     AI_TIMEOUT_SECONDS: int = 30
     AI_MAX_RETRIES: int = 2
     AI_ENABLED: bool = True
@@ -81,7 +81,7 @@ class Settings(BaseSettings):
 
     @property
     def effective_ai_model(self) -> str:
-        return self.GEMINI_MODEL or self.AI_MODEL or "gemini-3.5-flash"
+        return self.GEMINI_MODEL or self.AI_MODEL or "gemini-3.1-flash-lite"
 
 
     @field_validator("CORS_ORIGINS", mode="before")

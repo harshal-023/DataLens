@@ -108,7 +108,7 @@ export const BusinessAnalystService = {
     const url = `/api/v1/business-analyst/overview?workspace_id=${workspaceId}${
       datasetId ? `&dataset_id=${datasetId}` : ''
     }`;
-    return apiClient<ExecutiveOverview>(url);
+    return apiClient<ExecutiveOverview>(url, { workspaceId });
   },
 
   async getInsights(
@@ -127,12 +127,13 @@ export const BusinessAnalystService = {
     if (params?.severity) url += `&severity=${params.severity}`;
     if (params?.status) url += `&status=${params.status}`;
     if (params?.limit) url += `&limit=${params.limit}`;
-    return apiClient<BusinessInsight[]>(url);
+    return apiClient<BusinessInsight[]>(url, { workspaceId });
   },
 
   async getInsight(insightId: string, workspaceId: string): Promise<BusinessInsight> {
     return apiClient<BusinessInsight>(
-      `/api/v1/business-analyst/insights/${insightId}?workspace_id=${workspaceId}`
+      `/api/v1/business-analyst/insights/${insightId}?workspace_id=${workspaceId}`,
+      { workspaceId }
     );
   },
 
@@ -154,6 +155,7 @@ export const BusinessAnalystService = {
     }>(`/api/v1/business-analyst/insights/generate?workspace_id=${workspaceId}`, {
       method: 'POST',
       body: JSON.stringify(req),
+      workspaceId,
     });
   },
 
@@ -168,6 +170,7 @@ export const BusinessAnalystService = {
       {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus, notes }),
+        workspaceId,
       }
     );
   },
@@ -183,6 +186,7 @@ export const BusinessAnalystService = {
       {
         method: 'POST',
         body: JSON.stringify({ assigned_to_user_id: assignedToUserId, note }),
+        workspaceId,
       }
     );
   },
@@ -197,6 +201,7 @@ export const BusinessAnalystService = {
       {
         method: 'POST',
         body: JSON.stringify({ content }),
+        workspaceId,
       }
     );
   },
@@ -205,40 +210,41 @@ export const BusinessAnalystService = {
     const url = `/api/v1/business-analyst/trends?workspace_id=${workspaceId}${
       datasetId ? `&dataset_id=${datasetId}` : ''
     }`;
-    return apiClient<BusinessInsight[]>(url);
+    return apiClient<BusinessInsight[]>(url, { workspaceId });
   },
 
   async getAnomalies(workspaceId: string, datasetId?: string): Promise<BusinessInsight[]> {
     const url = `/api/v1/business-analyst/anomalies?workspace_id=${workspaceId}${
       datasetId ? `&dataset_id=${datasetId}` : ''
     }`;
-    return apiClient<BusinessInsight[]>(url);
+    return apiClient<BusinessInsight[]>(url, { workspaceId });
   },
 
   async getRisks(workspaceId: string, datasetId?: string): Promise<BusinessInsight[]> {
     const url = `/api/v1/business-analyst/risks?workspace_id=${workspaceId}${
       datasetId ? `&dataset_id=${datasetId}` : ''
     }`;
-    return apiClient<BusinessInsight[]>(url);
+    return apiClient<BusinessInsight[]>(url, { workspaceId });
   },
 
   async getOpportunities(workspaceId: string, datasetId?: string): Promise<BusinessInsight[]> {
     const url = `/api/v1/business-analyst/opportunities?workspace_id=${workspaceId}${
       datasetId ? `&dataset_id=${datasetId}` : ''
     }`;
-    return apiClient<BusinessInsight[]>(url);
+    return apiClient<BusinessInsight[]>(url, { workspaceId });
   },
 
   async getRunHistory(workspaceId: string, datasetId?: string, limit = 20): Promise<InsightRunHistory[]> {
     const url = `/api/v1/business-analyst/history?workspace_id=${workspaceId}&limit=${limit}${
       datasetId ? `&dataset_id=${datasetId}` : ''
     }`;
-    return apiClient<InsightRunHistory[]>(url);
+    return apiClient<InsightRunHistory[]>(url, { workspaceId });
   },
 
   async getSchedules(workspaceId: string): Promise<InsightSchedule[]> {
     return apiClient<InsightSchedule[]>(
-      `/api/v1/business-analyst/schedules?workspace_id=${workspaceId}`
+      `/api/v1/business-analyst/schedules?workspace_id=${workspaceId}`,
+      { workspaceId }
     );
   },
 
@@ -258,6 +264,51 @@ export const BusinessAnalystService = {
       {
         method: 'POST',
         body: JSON.stringify(req),
+        workspaceId,
+      }
+    );
+  },
+
+  async updateSchedule(
+    scheduleId: string,
+    workspaceId: string,
+    data: Partial<{
+      name: string;
+      frequency: 'daily' | 'weekly' | 'monthly' | 'on_refresh' | 'on_pipeline';
+      cron_expression: string | null;
+      timezone: string;
+      is_active: boolean;
+      dataset_id: string | null;
+      config: Record<string, any> | null;
+    }>
+  ): Promise<InsightSchedule> {
+    return apiClient<InsightSchedule>(
+      `/api/v1/business-analyst/schedules/${scheduleId}?workspace_id=${workspaceId}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        workspaceId,
+      }
+    );
+  },
+
+  async toggleScheduleActive(
+    scheduleId: string,
+    workspaceId: string,
+    isActive: boolean
+  ): Promise<InsightSchedule> {
+    return this.updateSchedule(scheduleId, workspaceId, { is_active: isActive });
+  },
+
+  async runScheduleNow(
+    scheduleId: string,
+    workspaceId: string
+  ): Promise<{ success: boolean; run_id: string; insights_generated: number; status: string }> {
+    return apiClient<{ success: boolean; run_id: string; insights_generated: number; status: string }>(
+      `/api/v1/business-analyst/schedules/${scheduleId}/run?workspace_id=${workspaceId}`,
+      {
+        method: 'POST',
+        workspaceId,
       }
     );
   },
@@ -265,7 +316,10 @@ export const BusinessAnalystService = {
   async deleteSchedule(scheduleId: string, workspaceId: string): Promise<{ success: boolean }> {
     return apiClient<{ success: boolean }>(
       `/api/v1/business-analyst/schedules/${scheduleId}?workspace_id=${workspaceId}`,
-      { method: 'DELETE' }
+      {
+        method: 'DELETE',
+        workspaceId,
+      }
     );
   },
 };

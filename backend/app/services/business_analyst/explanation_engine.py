@@ -72,8 +72,16 @@ Baseline: {baseline_val}
                         f"{prompt_context}"
                     )
                     ai_resp = await provider.generate_text(ai_prompt, temperature=0.2)
-                    if ai_resp and len(ai_resp.strip()) > 10:
-                        candidate = ai_resp.strip()
+                    candidate_text = ""
+                    if isinstance(ai_resp, dict):
+                        candidate_text = str(ai_resp.get("text") or ai_resp.get("content") or "").strip()
+                    elif isinstance(ai_resp, str):
+                        candidate_text = ai_resp.strip()
+                    elif ai_resp is not None:
+                        candidate_text = str(ai_resp).strip()
+
+                    if candidate_text and len(candidate_text) > 10:
+                        candidate = candidate_text
                         # Verify numerical citations against calculated evidence
                         is_valid, warnings = NLAEvidenceVerifier.verify_cited_numbers(candidate, metric_cards)
                         if is_valid:

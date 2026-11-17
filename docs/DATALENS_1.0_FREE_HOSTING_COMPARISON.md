@@ -67,3 +67,4 @@ The audited, optimal zero-cost stack for DataLens 1.0 is:
 ```
 
 **Total Expected Monthly Operating Cost: ₹0.00**.
+

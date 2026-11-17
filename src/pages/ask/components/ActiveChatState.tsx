@@ -73,6 +73,108 @@ export const ActiveChatState: React.FC<ActiveChatStateProps> = ({
     document.body.removeChild(link);
   };
 
+  const renderFormattedText = (text: string) => {
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let currentList: React.ReactNode[] = [];
+
+    const flushList = () => {
+      if (currentList.length > 0) {
+        elements.push(
+          <ul key={`ul-${elements.length}`} className="space-y-1.5 my-2 pl-1">
+            {currentList}
+          </ul>
+        );
+        currentList = [];
+      }
+    };
+
+    const parseInline = (lineStr: string): React.ReactNode => {
+      const parts: React.ReactNode[] = [];
+      const regex = /(\*\*.*?\*\*|`.*?`)/g;
+      let lastIdx = 0;
+      let match;
+
+      while ((match = regex.exec(lineStr)) !== null) {
+        if (match.index > lastIdx) {
+          parts.push(lineStr.substring(lastIdx, match.index));
+        }
+        const token = match[0];
+        if (token.startsWith('**') && token.endsWith('**')) {
+          parts.push(
+            <strong key={match.index} className="font-semibold text-[#102C46]">
+              {token.slice(2, -2)}
+            </strong>
+          );
+        } else if (token.startsWith('`') && token.endsWith('`')) {
+          parts.push(
+            <code key={match.index} className="px-1.5 py-0.5 rounded bg-[#EDF3F6] text-[#009F98] text-[11px] font-mono">
+              {token.slice(1, -1)}
+            </code>
+          );
+        }
+        lastIdx = regex.lastIndex;
+      }
+      if (lastIdx < lineStr.length) {
+        parts.push(lineStr.substring(lastIdx));
+      }
+      return parts.length > 0 ? parts : lineStr;
+    };
+
+    lines.forEach((rawLine, idx) => {
+      const line = rawLine.trim();
+
+      if (!line) {
+        flushList();
+        return;
+      }
+
+      if (line.startsWith('### ') || line.startsWith('## ')) {
+        flushList();
+        const title = line.replace(/^#{2,3}\s+/, '');
+        elements.push(
+          <h4 key={`h-${idx}`} className="text-xs sm:text-sm font-bold text-[#102C46] mt-3 mb-1">
+            {parseInline(title)}
+          </h4>
+        );
+        return;
+      }
+
+      if (/^[\*\-•]\s+/.test(line)) {
+        const content = line.replace(/^[\*\-•]\s+/, '');
+        currentList.push(
+          <li key={`li-${idx}`} className="flex items-start gap-2 text-xs sm:text-sm text-[#102C46]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#009F98] mt-1.5 shrink-0" />
+            <span>{parseInline(content)}</span>
+          </li>
+        );
+        return;
+      }
+
+      const numMatch = line.match(/^(\d+)\.\s+(.*)/);
+      if (numMatch) {
+        flushList();
+        elements.push(
+          <div key={`num-${idx}`} className="flex items-start gap-2 text-xs sm:text-sm text-[#102C46] my-1">
+            <span className="font-bold text-[#009F98] text-xs shrink-0 w-4">{numMatch[1]}.</span>
+            <span>{parseInline(numMatch[2])}</span>
+          </div>
+        );
+        return;
+      }
+
+      flushList();
+      elements.push(
+        <p key={`p-${idx}`} className="text-xs sm:text-sm text-[#102C46] my-1 leading-relaxed">
+          {parseInline(line)}
+        </p>
+      );
+    });
+
+    flushList();
+    return elements;
+  };
+
   return (
     <div className="flex-1 overflow-y-auto space-y-6 pr-1 pb-4">
       {messages.map((msg) => {
@@ -127,8 +229,8 @@ export const ActiveChatState: React.FC<ActiveChatStateProps> = ({
 
               {/* Conversational Bubble */}
               <div className="bg-white rounded-2xl border border-[#DCE5EB] p-4 shadow-subtle max-w-2xl text-xs sm:text-sm text-[#102C46] leading-relaxed space-y-3">
-                <div className="whitespace-pre-line">
-                  {msg.directAnswer || msg.content}
+                <div className="space-y-1">
+                  {renderFormattedText(msg.directAnswer || msg.content)}
                 </div>
 
                 {/* Follow-up Suggestions Chips */}

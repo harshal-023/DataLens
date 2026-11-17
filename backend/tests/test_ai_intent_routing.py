@@ -5,6 +5,7 @@ is cleanly distinguished from analytical questions before executing dataset quer
 """
 
 import uuid
+import pytest
 from unittest.mock import AsyncMock, patch
 
 from app.models.dataset import Dataset
@@ -346,4 +347,62 @@ def test_orchestrator_routes_casual_chat_without_duckdb_execution():
         assert response.chart_data is None
         assert response.evidence == []
         assert "welcome" in response.direct_answer.lower()
+
+
+def test_conversational_response_builder_async_gemini_mocked():
+    """Verify build_conversational_response_async formats prompt and returns Gemini output."""
+    import asyncio
+
+    class MockGemini:
+        async def generate_text(self, *args, **kwargs):
+            return {
+                "text": "Hello! I am DataLens AI. How can I help you analyze your data today?",
+                "latency_ms": 150,
+                "model": "gemini-3.1-flash-lite",
+                "provider": "gemini",
+            }
+
+    res = asyncio.run(
+        ConversationalResponseBuilder.build_conversational_response_async(
+            question="Hello there",
+            intent=ConversationIntent.GREETING,
+            dataset_name="Retail_Sales",
+            row_count=5000,
+            provider=MockGemini(),
+        )
+    )
+
+    assert res["provider"] == "gemini"
+    assert res["model"] == "gemini-3.1-flash-lite"
+    assert "DataLens AI" in res["direct_answer"]
+    assert res["metric_cards"] == []
+    assert res["chart_data"] is None
+
+
+def test_conversational_response_builder_async_fallback_when_gemini_fails():
+    """Verify build_conversational_response_async gracefully falls back to deterministic rules if Gemini errors."""
+    import asyncio
+
+    class FailingGemini:
+        async def generate_text(self, *args, **kwargs):
+            raise Exception("API quota exceeded")
+
+    res = asyncio.run(
+        ConversationalResponseBuilder.build_conversational_response_async(
+            question="What can you do?",
+            intent=ConversationIntent.CAPABILITY_QUERY,
+            dataset_name="Retail_Sales",
+            provider=FailingGemini(),
+        )
+    )
+
+    assert res["provider"] == "deterministic_fallback"
+    assert "Metric Calculations" in res["direct_answer"]
+    assert res["metric_cards"] == []
+
+
+
+
+
+
 

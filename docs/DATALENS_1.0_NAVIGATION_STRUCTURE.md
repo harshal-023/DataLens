@@ -101,3 +101,4 @@ flowchart LR
 
 - `Ctrl + K` / `Cmd + K`: Global search modal accessing datasets, dashboards, reports, and settings instantaneously.
 - Mobile Hamburger: Triggers responsive side drawer preserving the exact same 5-pillar structure.
+

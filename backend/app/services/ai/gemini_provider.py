@@ -20,7 +20,7 @@ class GeminiProvider(AIProvider):
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-2.5-flash",
+        model: str = "gemini-3.1-flash-lite",
         timeout_seconds: int = 30,
         max_retries: int = 2,
     ) -> None:
